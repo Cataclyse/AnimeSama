@@ -15,5 +15,5 @@ regex = "1.13"
 opener = "0.9"
 ureq = { version = "2.10", features = ["json"] }
 
-[build-dependencies]
+[target.'cfg(windows)'.build-dependencies]
 winres = "0.1"

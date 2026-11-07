@@ -19,6 +19,8 @@ pub fn app_data_dir() -> PathBuf {
         PathBuf::from(appdata).join("AnimeSama")
     } else if let Ok(home) = std::env::var("USERPROFILE") {
         PathBuf::from(home).join("AppData").join("Local").join("AnimeSama")
+    } else if let Ok(xdg) = std::env::var("XDG_DATA_HOME") {
+        PathBuf::from(xdg).join("AnimeSama")
     } else if let Ok(home) = std::env::var("HOME") {
         PathBuf::from(home).join(".local").join("share").join("AnimeSama")
     } else {

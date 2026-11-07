@@ -19,7 +19,7 @@ Une application desktop moderne et complète écrite en **Rust** offrant une int
 - **Ad Shield Intégré** :
   - Bloqueur de publicités et d'onglets intempestifs sur les lecteurs tiers (VOE, VidMoly, Uqload).
   - Proxy local filtrant les scripts indésirables et les popups trompeuses.
-- **Données Centralisées dans `%LOCALAPPDATA%\AnimeSama`** :
+- **Données Centralisées dans `%LOCALAPPDATA%\AnimeSama` (Windows) ou `~/.local/share/AnimeSama` (Linux)** :
   - Vos listes, favoris, historique et sessions sont conservés en lieu sûr dans le dossier utilisateur local (`userdata.json`, `session.json`).
   - Aucun stockage polluant dans le dossier de travail.
 - **Synchronisation avec votre compte Anime-Sama** :
@@ -29,11 +29,32 @@ Une application desktop moderne et complète écrite en **Rust** offrant une int
 
 ## 💻 Démarrage & Exécution
 
+### 🐧 Compatibilité Linux
+
+L'application est **100% compatible Linux** (ainsi que Windows et macOS). Sous Linux, le moteur utilise **GTK 3** et **WebKitGTK** pour la fenêtre native.
+
+#### Dépendances système requises (Linux) :
+
+- **Ubuntu / Debian / Mint** :
+  ```bash
+  sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev build-essential
+  ```
+- **Arch Linux / Manjaro** :
+  ```bash
+  sudo pacman -S webkit2gtk-4.1 gtk3 base-devel
+  ```
+- **Fedora / RHEL** :
+  ```bash
+  sudo dnf install webkit2gtk4.1-devel gtk3-devel
+  ```
+
+*Note : si WebKitGTK n'est pas installé ou sur un serveur sans affichage graphique, vous pouvez exécuter `cargo run --release -- --browser` ou `cargo run --release -- --headless`.*
+
 ### 1. Lancement Standard (Fenêtre Native Desktop)
 ```bash
 cargo run --release
 ```
-L'application ouvre une fenêtre native Windows (accélérée matériellement via WebView2 avec l'icône officielle Anime-Sama).
+L'application ouvre une fenêtre native (WebView2 sur Windows, WebKitGTK sur Linux avec accélération matérielle et l'icône officielle Anime-Sama).
 
 ### 2. Lancement avec Navigateur
 Pour ouvrir l'application dans votre navigateur web par défaut :
