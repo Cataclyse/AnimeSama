@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anime-Sama</title>
+    <link rel="icon" type="image/png" href="https://anime-sama.to/img/opti/icon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+        <link rel="stylesheet" href="/css/variables.css">
+    <link rel="stylesheet" href="/css/base.css">
+    <link rel="stylesheet" href="/css/navbar.css">
+    <link rel="stylesheet" href="/css/hero.css">
+    <link rel="stylesheet" href="/css/cards.css">
+    <link rel="stylesheet" href="/css/modal.css">
+    <link rel="stylesheet" href="/css/player.css">
+    <link rel="stylesheet" href="/css/settings.css">
+    <link rel="stylesheet" href="/css/responsive.css">
+</head>
+<body>
+    
+    <header class="main-nav" id="navbar">
+        <div class="nav-left">
+            <a href="#" class="brand-logo" onclick="switchView('home'); return false;">
+                <img class="logo-banner" src="https://anime-sama.to/img/opti/logo_banniere.webp" alt="Anime-Sama">
+                <img class="logo-compact" src="https://anime-sama.to/img/opti/logo.webp" alt="Anime-Sama">
+            </a>
+            <nav class="nav-links">
+                <a href="#" class="nav-link active" data-view="home" data-i18n="nav.home" onclick="switchView('home'); return false;">Accueil</a>
+                <a href="#" class="nav-link" data-view="animes" data-i18n="nav.animes" onclick="switchView('animes'); return false;">Animes</a>
+                <a href="#" class="nav-link" data-view="scans" data-i18n="nav.scans" onclick="switchView('scans'); return false;">Scans & Webtoons</a>
+                <a href="#" class="nav-link" data-view="classiques" data-i18n="nav.classics" onclick="switchView('classiques'); return false;">Classiques</a>
+                <a href="#" class="nav-link" data-view="planning" data-i18n="nav.planning" onclick="switchView('planning'); return false;">Planning</a>
+                <a href="#" class="nav-link" data-view="watchlist" onclick="switchView('watchlist'); return false;">
+                    <span data-i18n="nav.watchlist">Ma Liste</span> <span class="badge-count" id="watchlistCount">0</span>
+                </a>
+            </nav>
+        </div>
+
+        <div class="nav-right">
+            
+            <div class="search-box" id="searchBox">
+                <button class="search-btn" id="searchToggleBtn" title="Rechercher" aria-label="Rechercher">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                </button>
+                <input type="text" id="searchInput" placeholder="Titres, genres, mots-clés..." data-i18n-placeholder="nav.search_placeholder" autocomplete="off">
+                <button class="search-clear-btn" id="searchClearBtn" title="Effacer" style="display: none;">✕</button>
+            </div>
+
+            <div class="filter-dropdown">
+                <select id="genreSelect" title="Filtrer par genre" data-i18n-title="nav.filter_genres">
+                    <option value="" data-i18n="nav.all_genres">Tous les genres</option>
+                    <option value="Action" data-i18n="genre.action">Action</option>
+                    <option value="Aventure" data-i18n="genre.adventure">Aventure</option>
+                    <option value="Comédie" data-i18n="genre.comedy">Comédie</option>
+                    <option value="Drame" data-i18n="genre.drama">Drame</option>
+                    <option value="Fantasy" data-i18n="genre.fantasy">Fantasy</option>
+                    <option value="Isekai" data-i18n="genre.isekai">Isekai</option>
+                    <option value="Romance" data-i18n="genre.romance">Romance</option>
+                    <option value="Shonen" data-i18n="genre.shonen">Shonen</option>
+                    <option value="Webtoon" data-i18n="genre.webtoon">Webtoon</option>
+                    <option value="Mystère" data-i18n="genre.mystery">Mystère</option>
+                </select>
+            </div>
+
+            <div class="custom-lang-selector" id="navLangSelector">
+                <button class="custom-lang-btn" id="navLangBtn" onclick="toggleNavLangDropdown(event)" aria-label="Langue de l'interface" title="Changer de langue">
+                    <span class="custom-lang-flag" id="navLangCurrentFlag"></span>
+                    <span class="custom-lang-code" id="navLangCurrentCode">FR</span>
+                    <svg class="custom-lang-arrow" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <div class="custom-lang-menu" id="navLangMenu"></div>
+            </div>
+
+            <div class="profile-menu">
+                <button class="settings-nav-btn" id="accountBtn" title="Paramètres & Compte" aria-label="Paramètres">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main id="mainContainer">
+        
+        <div id="viewHome" class="view-section active">
+            
+            <section class="billboard" id="billboard">
+                <div class="billboard-backdrop" id="heroBackdrop"></div>
+                <div class="billboard-vignette"></div>
+                <div class="billboard-vignette-bottom"></div>
+
+                <div class="billboard-content">
+                    <div class="billboard-badge-wrap">
+                        <span class="trending-badge">TOP 10</span>
+                        <span class="season-badge" id="heroBadge">Saison 2 en cours</span>
+                    </div>
+                    <h1 class="billboard-title" id="heroTitle">Chargement...</h1>
+                    <div class="billboard-genres" id="heroGenres"></div>
+                    <p class="billboard-synopsis" id="heroSynopsis"></p>
+                    
+                    <div class="billboard-actions">
+                        <button class="btn btn-play" id="heroPlayBtn">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                            <span data-i18n="hero.watch">Regarder</span>
+                        </button>
+                        <button class="btn btn-info" id="heroInfoBtn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="16" x2="12" y2="12"></line>
+                                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                            </svg>
+                            <span data-i18n="hero.info">Plus d'infos</span>
+                        </button>
+                        <button class="btn btn-list" id="heroListBtn" title="Ajouter à ma liste">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            <span data-i18n="hero.list">Ma Liste</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="billboard-indicators" id="heroIndicators"></div>
+            </section>
+
+            <div class="content-rows" id="contentRows">
+                
+            </div>
+        </div>
+
+        <div id="viewPlanning" class="view-section">
+            <div class="section-page-header">
+                <h2 data-i18n="planning.title">Planning des Sorties</h2>
+                <p data-i18n="planning.subtitle">Découvrez les diffusions d'épisodes et de chapitres de la semaine</p>
+
+                <div class="planning-tabs" id="planningTabs">
+                    <button class="planning-tab" data-day="Lundi" data-i18n="day.mon">Lundi</button>
+                    <button class="planning-tab" data-day="Mardi" data-i18n="day.tue">Mardi</button>
+                    <button class="planning-tab" data-day="Mercredi" data-i18n="day.wed">Mercredi</button>
+                    <button class="planning-tab" data-day="Jeudi" data-i18n="day.thu">Jeudi</button>
+                    <button class="planning-tab" data-day="Vendredi" data-i18n="day.fri">Vendredi</button>
+                    <button class="planning-tab" data-day="Samedi" data-i18n="day.sat">Samedi</button>
+                    <button class="planning-tab" data-day="Dimanche" data-i18n="day.sun">Dimanche</button>
+                </div>
+            </div>
+
+            <div class="planning-grid" id="planningGrid"></div>
+        </div>
+
+        <div id="viewGrid" class="view-section">
+            <div class="section-page-header">
+                <h2 id="gridTitle" data-i18n="grid.catalogue_title">Catalogue</h2>
+                <p id="gridSubtitle" data-i18n="grid.catalogue_subtitle">Explorez toutes les œuvres disponibles</p>
+            </div>
+            <div class="catalogue-grid" id="catalogueGrid"></div>
+        </div>
+
+        <div id="viewWatchlist" class="view-section">
+            <div class="section-page-header">
+                <h2 data-i18n="watchlist.title">Ma Liste de Favoris</h2>
+                <p data-i18n="watchlist.subtitle">Vos séries, animes et scans enregistrés</p>
+            </div>
+            <div class="catalogue-grid" id="watchlistGrid"></div>
+            <div class="empty-state" id="watchlistEmpty" style="display: none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                </svg>
+                <h3 data-i18n="watchlist.empty_title">Votre liste est vide</h3>
+                <p data-i18n="watchlist.empty_desc">Ajoutez des animes et mangas en cliquant sur l'icône "+" pour les retrouver ici à tout moment.</p>
+                <button class="btn btn-play" onclick="switchView('home')" data-i18n="watchlist.explore_btn">Explorer le catalogue</button>
+            </div>
+        </div>
+
+        <div id="viewSearch" class="view-section">
+            <div class="section-page-header">
+                <h2 data-i18n="search.title">Résultats de recherche</h2>
+                <p id="searchStatus" data-i18n="search.status_prompt">Tapez un mot-clé pour lancer la recherche...</p>
+            </div>
+            <div class="catalogue-grid" id="searchGrid"></div>
+        </div>
+    </main>
+
+    <div class="modal-backdrop" id="detailModal">
+        <div class="modal-container">
+            <button class="modal-close-btn" id="modalCloseBtn" aria-label="Fermer">✕</button>
+            
+            <div class="modal-hero">
+                <div class="modal-hero-bg" id="modalHeroBg"></div>
+                <div class="modal-hero-vignette"></div>
+                <div class="modal-hero-content">
+                    <h2 class="modal-title" id="modalTitle">Titre de l'œuvre</h2>
+
+                    <div class="modal-hero-progress" id="modalHeroProgress" style="display: none;">
+                        <div class="hero-progress-track">
+                            <div class="hero-progress-fill" id="modalHeroProgressFill"></div>
+                        </div>
+                        <span class="hero-progress-label" id="modalHeroProgressLabel">Épisode 1</span>
+                    </div>
+
+                    <div class="modal-actions">
+                        <button class="btn btn-play" id="modalPlayBtn">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                            <span id="modalPlayBtnText">Reprendre</span>
+                        </button>
+                        <button class="btn-circle btn-list" id="modalWatchlistBtn" title="Ajouter à ma liste">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        </button>
+                        <a href="#" class="btn-circle btn-info" id="modalSourceLink" target="_blank" rel="noopener" title="Fiche Anime-Sama">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-overview">
+                <div class="overview-left">
+                    <div class="modal-meta-badges">
+                        <span class="meta-badge-match" data-i18n="modal.recommended">Recommandé à 98%</span>
+                        <span class="meta-badge-year" id="modalYear">2023</span>
+                        <span class="meta-badge-count" id="modalEpCount" data-i18n="modal.episodes_badge">Épisodes</span>
+                        <span class="meta-badge-pill">HD</span>
+                        <span class="meta-badge-pill" id="modalAgeRating">16+</span>
+                    </div>
+                    <div class="featured-ep-title" id="modalFeaturedEpTitle"></div>
+                    <p class="modal-synopsis" id="modalSynopsis" data-i18n="modal.loading_details">Chargement du synopsis...</p>
+                </div>
+
+                <div class="overview-right">
+                    <div class="info-block">
+                        <span class="info-label" data-i18n="modal.genres_label">Genres :</span>
+                        <div class="info-tags" id="modalGenres"></div>
+                    </div>
+                    <div class="info-block">
+                        <span class="info-label" data-i18n="modal.type_label">Type :</span>
+                        <span class="info-val" id="modalType">Anime / Scan</span>
+                    </div>
+                    <div class="info-block">
+                        <span class="info-label" data-i18n="modal.languages_label">Langues :</span>
+                        <span class="info-val" id="modalLanguages">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="episodes-section">
+                <div class="episodes-header">
+                    <div class="episodes-header-left">
+                        <h3 data-i18n="modal.episodes">Épisodes</h3>
+                        <div class="language-select-tabs" id="modalLanguageTabs"></div>
+                    </div>
+                    <div class="episodes-header-right">
+                        <div class="episodes-view-toggle">
+                            <button class="view-toggle-btn active" id="viewListBtn" title="Vue avec photos" data-i18n-title="modal.view_list" onclick="switchEpisodesView('list')">
+                                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                            </button>
+                            <button class="view-toggle-btn" id="viewGridBtn" title="Vue grille compacte" data-i18n-title="modal.view_grid" onclick="switchEpisodesView('compact')">
+                                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                            </button>
+                        </div>
+                        <div class="season-select-wrap">
+                            <select id="modalSeasonSelect" class="season-select"></select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="player-select-tabs" id="modalPlayerTabs"></div>
+
+                <div class="episodes-container ep-list-mode" id="modalEpisodesGrid">
+                    <div class="episodes-loading" data-i18n="modal.select_season_prompt">Sélectionnez une saison pour voir les épisodes...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+        </div>
+    </div>
+
+    <div class="player-modal-backdrop" id="playerModal">
+        <div class="player-container">
+            <div class="player-topbar">
+                <div class="player-info">
+                    <span class="player-title" id="playerTitle" data-i18n="player.title">Lecture</span>
+                    <span class="player-ep" id="playerEpisodeTitle">Épisode 1</span>
+                </div>
+                <div class="player-controls">
+                    <div class="player-select-wrap">
+                        <label for="playerLecteurSelect" class="player-lecteur-label" data-i18n="player.lecteur_label">Lecteur :</label>
+                        <select id="playerLecteurSelect" class="player-lecteur-select"></select>
+                    </div>
+                    <div class="player-lang-tabs" id="playerLangTabs"></div>
+                    <button class="player-btn" id="playerPrevBtn" title="Épisode précédent" data-i18n-title="player.prev" data-i18n="player.prev">⏮ Précédent</button>
+                    <button class="player-btn" id="playerNextBtn" title="Épisode suivant" data-i18n-title="player.next" data-i18n="player.next">Suivant ⏭</button>
+                    <button class="player-close-btn" id="playerCloseBtn" title="Fermer le lecteur" data-i18n-title="player.close">✕</button>
+                </div>
+            </div>
+            <div class="player-frame-wrap" id="playerFrameWrap">
+                <iframe id="videoIframe" src="" frameborder="0" allowfullscreen allow="autoplay; fullscreen" referrerpolicy="no-referrer"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="accountModal">
+        <div class="account-container">
+            <button class="modal-close-btn" id="accountCloseBtn" aria-label="Fermer" data-i18n-title="modal.close">✕</button>
+
+            <h2 class="netflix-settings-title" data-i18n="settings.title">Paramètres</h2>
+
+            <div class="netflix-settings-tabs">
+                <button class="netflix-tab-btn active" id="modeCloudBtn" data-mode="cloud" data-i18n="settings.account_tab">Compte Anime-Sama</button>
+                <button class="netflix-tab-btn" id="modeLocalBtn" data-mode="local" data-i18n="settings.local_tab">Stockage Local</button>
+            </div>
+
+            <div class="account-panel" id="panelLocal" style="display:none;">
+                <div class="netflix-settings-row">
+                    <div class="netflix-row-info">
+                        <div class="netflix-row-label" data-i18n="settings.local_storage_label">Stockage sur l'appareil</div>
+                        <div class="netflix-row-desc" data-i18n-html="settings.local_storage_desc">Vos listes, favoris et épisodes vus restent stockés uniquement sur ce PC dans <code>userdata.json</code>. Aucune donnée n'est envoyée sur Internet.</div>
+                    </div>
+                    <div class="netflix-row-action">
+                        <button class="btn-netflix-gray" onclick="openAppDataFolder()" data-i18n="settings.open_appdata_btn">Ouvrir le dossier</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="account-panel" id="panelCloudLoggedOut" style="display:none;">
+                <div class="account-forms">
+                    <form id="formAccountLogin" class="account-form active">
+                        <div class="netflix-form-group">
+                            <label class="netflix-form-label" data-i18n="settings.pseudo_label">Pseudo Anime-Sama</label>
+                            <input class="netflix-form-input" type="text" id="accountLoginPseudo" autocomplete="username" placeholder="Pseudo" data-i18n-placeholder="settings.pseudo_placeholder" required>
+                        </div>
+                        <div class="netflix-form-group">
+                            <label class="netflix-form-label" data-i18n="settings.password_label">Mot de passe</label>
+                            <input class="netflix-form-input" type="password" id="accountLoginPassword" autocomplete="current-password" placeholder="Mot de passe" data-i18n-placeholder="settings.password_placeholder" required>
+                        </div>
+                        <button class="btn-netflix-red" type="submit" data-i18n="settings.login_btn">Se connecter</button>
+                        <p class="netflix-form-subtext"><span data-i18n="settings.no_account_text">Pas de compte ?</span> <a id="toRegisterLink" data-i18n="settings.create_account_link">Créer un compte</a></p>
+                    </form>
+
+                    <form id="formAccountRegister" class="account-form">
+                        <div class="netflix-form-group">
+                            <label class="netflix-form-label" data-i18n="settings.register_pseudo_label">Pseudo souhaité</label>
+                            <input class="netflix-form-input" type="text" id="accountRegisterPseudo" minlength="3" maxlength="30" autocomplete="username" placeholder="Pseudo (3 à 30 car.)" data-i18n-placeholder="settings.register_pseudo_placeholder" required>
+                        </div>
+                        <div class="netflix-form-group">
+                            <label class="netflix-form-label" data-i18n="settings.register_password_label">Mot de passe (12 car. min, 1 symbole)</label>
+                            <input class="netflix-form-input" type="password" id="accountRegisterPassword" minlength="12" autocomplete="new-password" placeholder="Mot de passe" data-i18n-placeholder="settings.password_placeholder" required>
+                        </div>
+                        <div class="netflix-form-group">
+                            <label class="netflix-form-label" data-i18n="settings.register_confirm_label">Confirmer le mot de passe</label>
+                            <input class="netflix-form-input" type="password" id="accountRegisterPassword2" minlength="12" autocomplete="new-password" placeholder="Confirmer" data-i18n-placeholder="settings.confirm_placeholder" required>
+                        </div>
+                        <button class="btn-netflix-red" type="submit" data-i18n="settings.register_btn">Créer le compte</button>
+                        <p class="netflix-form-subtext"><span data-i18n="settings.already_account_text">Déjà un compte ?</span> <a id="toLoginLink" data-i18n="settings.login_link">Se connecter</a></p>
+                    </form>
+                </div>
+                <p class="account-error" id="accountError" style="display:none;"></p>
+            </div>
+
+            <div class="account-panel" id="panelCloudLoggedIn" style="display:none;">
+                <div class="netflix-section-heading" data-i18n="settings.section_account">COMPTE</div>
+                <div class="netflix-settings-row">
+                    <div class="netflix-row-info">
+                        <div class="netflix-row-label" id="accountPseudo">Utilisateur</div>
+                        <div class="netflix-row-desc" data-i18n="settings.account_connected_desc">Compte anime-sama.to connecté</div>
+                    </div>
+                    <div class="netflix-row-action">
+                        <button class="netflix-link-btn" id="accountLogoutBtn" data-i18n="settings.disconnect">Se déconnecter</button>
+                    </div>
+                </div>
+
+                <div class="netflix-section-heading" data-i18n="settings.section_sync">SYNCHRONISATION</div>
+                <div class="netflix-settings-row">
+                    <div class="netflix-row-info">
+                        <div class="netflix-row-label" data-i18n="settings.auto_sync">Synchronisation automatique</div>
+                        <div class="netflix-row-desc" data-i18n="settings.auto_sync_desc">Garde automatiquement vos épisodes vus synchronisés à chaque lecture</div>
+                    </div>
+                    <div class="netflix-row-action">
+                        <label class="netflix-toggle">
+                            <input type="checkbox" id="autoSyncCheckbox">
+                            <span class="netflix-toggle-track"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="netflix-settings-row">
+                    <div class="netflix-row-info">
+                        <div class="netflix-row-label" data-i18n="settings.sync_now">Mettre à jour maintenant</div>
+                        <div class="netflix-row-desc" id="syncStatus" data-i18n="settings.sync_ready">Synchronisation prête</div>
+                    </div>
+                    <div class="netflix-row-action">
+                        <button class="btn-netflix-gray" id="syncAutoBtn" data-i18n="settings.sync_btn">Synchroniser</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="netflix-section-heading" data-i18n="settings.section_player">LECTEUR & EXPÉRIENCE</div>
+            <div class="netflix-settings-row">
+                <div class="netflix-row-info">
+                    <div class="netflix-row-label" data-i18n="settings.ad_shield">Ad Shield (uBlock & Privacy Badger)</div>
+                    <div class="netflix-row-desc" data-i18n="settings.ad_shield_desc">Bloque les popups, publicités et fausses alertes sur VOE, VidMoly et Uqload</div>
+                </div>
+                <div class="netflix-row-action">
+                    <label class="netflix-toggle">
+                        <input type="checkbox" id="adShieldCheckbox" checked>
+                        <span class="netflix-toggle-track"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="netflix-section-heading" data-i18n="settings.section_language">LANGUE DU LOGICIEL</div>
+            <div class="netflix-settings-row">
+                <div class="netflix-row-info">
+                    <div class="netflix-row-label" data-i18n="settings.language_label">Langue de l'interface</div>
+                    <div class="netflix-row-desc" data-i18n="settings.language_desc">Sélectionnez la langue des menus et des textes (.lang)</div>
+                </div>
+                <div class="netflix-row-action" style="display: flex; gap: 8px;">
+                    <button class="btn-netflix-gray" onclick="openLangFolder()" data-i18n="settings.open_lang_folder">📁 Dossier .lang</button>
+                    <button class="btn-netflix-gray" onclick="refreshLanguages()" title="Recharger les langues" data-i18n-title="settings.refresh_lang">↻</button>
+                </div>
+            </div>
+            <div class="settings-lang-grid" id="settingsLangGrid"></div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script src="/js/i18n.js"></script>
+    <script src="/js/state.js"></script>
+    <script src="/js/utils.js"></script>
+    <script src="/js/api.js"></script>
+    <script src="/js/userdata.js"></script>
+    <script src="/js/hero.js"></script>
+    <script src="/js/rows.js"></script>
+    <script src="/js/planning.js"></script>
+    <script src="/js/modal.js"></script>
+    <script src="/js/player.js"></script>
+    <script src="/js/search.js"></script>
+    <script src="/js/settings.js"></script>
+    <script src="/js/navigation.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>

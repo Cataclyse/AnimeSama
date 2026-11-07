@@ -1,0 +1,21 @@
+:root {
+    --bg-main: #141414;
+    --bg-card: #181818;
+    --bg-card-hover: #232323;
+    --bg-surface: #1e1e1e;
+    --bg-modal: #181818;
+    --accent: #E50914;
+    --accent-hover: #f6121d;
+    --text-primary: #FFFFFF;
+    --text-secondary: #AAAAAA;
+    --text-muted: #777777;
+    --border-subtle: rgba(255, 255, 255, 0.1);
+    --shadow-card: 0 4px 14px rgba(0, 0, 0, 0.45);
+    --shadow-card-hover: 0 10px 25px rgba(0, 0, 0, 0.75);
+    --font-heading: 'Roboto', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --font-body: 'Roboto', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 10px;
+    --transition-smooth: all 0.28s cubic-bezier(0.25, 0.8, 0.25, 1);
+}

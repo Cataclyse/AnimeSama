@@ -1,0 +1,347 @@
+.main-nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 68px;
+    padding: 0 4%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 1000;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.4) 60%, transparent 100%);
+    transition: background-color 0.35s ease;
+}
+
+.main-nav.scrolled {
+    background-color: rgba(20, 20, 20, 0.96);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.nav-left {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+}
+
+.brand-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+}
+
+.logo-banner {
+    height: 32px;
+    width: auto;
+    display: block;
+}
+
+.logo-compact {
+    height: 32px;
+    width: auto;
+    display: none;
+}
+
+.nav-links {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.nav-link {
+    color: #e5e5e5;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    transition: color 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.nav-link:hover {
+    color: #b3b3b3;
+}
+
+.nav-link.active {
+    color: #ffffff;
+    font-weight: 700;
+}
+
+.badge-count {
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 10px;
+}
+
+.nav-right {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+.search-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 20px;
+    padding: 4px 12px;
+    transition: var(--transition-smooth);
+}
+
+.search-box:focus-within {
+    border-color: var(--accent);
+    background: rgba(0, 0, 0, 0.85);
+}
+
+.search-btn {
+    background: none;
+    border: none;
+    color: #ccc;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    padding: 4px;
+}
+
+.search-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.search-box input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #fff;
+    font-size: 14px;
+    width: 180px;
+    padding: 4px 8px;
+    transition: width 0.3s ease;
+}
+
+.search-box:focus-within input {
+    width: 260px;
+}
+
+.search-clear-btn {
+    background: none;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 6px;
+}
+
+.filter-dropdown select {
+    background: rgba(30, 30, 30, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 18px;
+    font-size: 13px;
+    cursor: pointer;
+    outline: none;
+    transition: var(--transition-smooth);
+}
+
+.filter-dropdown select:hover {
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.filter-dropdown select option {
+    background: #181818;
+    color: #fff;
+}
+
+.profile-menu .settings-nav-btn {
+    background: none;
+    border: none;
+    color: #e5e5e5;
+    cursor: pointer;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease, transform 0.25s ease;
+}
+
+.profile-menu .settings-nav-btn:hover {
+    color: #fff;
+    transform: rotate(45deg);
+}
+
+.profile-menu .settings-nav-btn svg {
+    width: 22px;
+    height: 22px;
+}
+
+.custom-lang-selector {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.custom-lang-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(24, 24, 24, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 20px;
+    padding: 5px 12px;
+    color: #fff;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+    outline: none;
+}
+
+.custom-lang-btn:hover {
+    background: rgba(45, 45, 45, 0.95);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.custom-lang-flag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 14px;
+    border-radius: 2px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    flex-shrink: 0;
+}
+
+.lang-flag-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+}
+
+.custom-lang-code {
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    text-transform: uppercase;
+}
+
+.custom-lang-arrow {
+    width: 12px;
+    height: 12px;
+    color: #aaa;
+    transition: transform 0.2s ease, color 0.2s ease;
+    flex-shrink: 0;
+}
+
+.custom-lang-selector:has(.custom-lang-menu.open) .custom-lang-arrow {
+    transform: rotate(180deg);
+    color: #fff;
+}
+
+.custom-lang-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 190px;
+    background: rgba(18, 18, 18, 0.97);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    box-shadow: 0 14px 35px rgba(0, 0, 0, 0.85);
+    padding: 6px;
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    z-index: 1000;
+    backdrop-filter: blur(14px);
+    animation: langMenuIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.custom-lang-menu.open {
+    display: flex;
+}
+
+@keyframes langMenuIn {
+    from {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.custom-lang-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border: none;
+    background: transparent;
+    color: #d2d2d2;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    box-sizing: border-box;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.custom-lang-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    transform: translateX(2px);
+}
+
+.custom-lang-item.active {
+    background: rgba(229, 9, 20, 0.18);
+    color: #fff;
+    font-weight: 700;
+}
+
+.custom-lang-flag-wrap {
+    width: 22px;
+    height: 15px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 2px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+    flex-shrink: 0;
+}
+
+.custom-lang-label {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.custom-lang-tag {
+    font-size: 11px;
+    font-weight: 700;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.custom-lang-item.active .custom-lang-tag {
+    color: var(--accent);
+}

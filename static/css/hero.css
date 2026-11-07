@@ -1,0 +1,210 @@
+.billboard {
+    position: relative;
+    width: 100%;
+    height: 80vh;
+    min-height: 550px;
+    max-height: 800px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+}
+
+.billboard-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-position: center 25%;
+    background-repeat: no-repeat;
+    transition: opacity 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: scale(1.02);
+}
+
+.billboard-vignette {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(20, 20, 20, 0.95) 0%, rgba(20, 20, 20, 0.75) 35%, rgba(20, 20, 20, 0.15) 75%, transparent 100%);
+}
+
+.billboard-vignette-bottom {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 240px;
+    background: linear-gradient(
+        0deg,
+        var(--bg-main) 0%,
+        rgba(20, 20, 20, 0.95) 25%,
+        rgba(20, 20, 20, 0.7) 50%,
+        rgba(20, 20, 20, 0.25) 75%,
+        transparent 100%
+    );
+    pointer-events: none;
+}
+
+.billboard-content {
+    position: relative;
+    z-index: 10;
+    max-width: 650px;
+    padding-left: 4%;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.billboard-badge-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.trending-badge {
+    background: var(--accent);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 3px;
+    letter-spacing: 0.5px;
+}
+
+.season-badge {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 3px;
+    backdrop-filter: blur(4px);
+}
+
+.billboard-title {
+    font-family: var(--font-heading);
+    font-size: 56px;
+    font-weight: 900;
+    line-height: 1.05;
+    letter-spacing: -1px;
+    color: #ffffff;
+    text-shadow: 0 4px 18px rgba(0, 0, 0, 0.9);
+}
+
+.billboard-genres {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.genre-tag {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #e5e5e5;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.billboard-synopsis {
+    color: #e5e5e5;
+    font-size: 15px;
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+}
+
+.billboard-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 8px;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 24px;
+    border-radius: 4px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    text-decoration: none;
+    transition: var(--transition-smooth);
+}
+
+.btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+.btn-play {
+    background-color: #ffffff;
+    color: #000000;
+}
+
+.btn-play:hover {
+    background-color: rgba(255, 255, 255, 0.85);
+    transform: scale(1.04);
+}
+
+.btn-info {
+    background-color: rgba(109, 109, 110, 0.7);
+    color: #ffffff;
+    backdrop-filter: blur(4px);
+}
+
+.btn-info:hover {
+    background-color: rgba(109, 109, 110, 0.45);
+    transform: scale(1.04);
+}
+
+.btn-list {
+    background-color: rgba(45, 45, 45, 0.75);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.btn-list:hover {
+    background-color: rgba(60, 60, 60, 0.9);
+    border-color: #fff;
+    transform: scale(1.04);
+}
+
+.btn-list.in-list {
+    background-color: var(--accent);
+    border-color: var(--accent);
+}
+
+.billboard-indicators {
+    position: absolute;
+    bottom: 100px;
+    right: 4%;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.indicator-dot {
+    width: 14px;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.4);
+    border-radius: 2px;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+}
+
+.indicator-dot.active {
+    width: 28px;
+    background: var(--accent);
+}

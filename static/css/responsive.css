@@ -1,0 +1,275 @@
+@media (max-width: 1100px) {
+    .nav-left {
+        gap: 18px;
+    }
+
+    .nav-links {
+        gap: 12px;
+    }
+
+    .nav-link {
+        font-size: 13px;
+    }
+
+    .search-box input {
+        width: 130px;
+    }
+
+    .search-box:focus-within input {
+        width: 180px;
+    }
+
+    .filter-dropdown {
+        display: none;
+    }
+
+    .billboard-title {
+        font-size: 44px;
+    }
+
+    .billboard-content {
+        max-width: 85%;
+    }
+}
+
+@media (max-width: 900px) {
+    .main-nav {
+        flex-wrap: wrap;
+        height: auto;
+        min-height: 64px;
+        padding: 10px 4%;
+        gap: 10px;
+    }
+
+    .nav-links {
+        display: none;
+    }
+
+    .nav-right {
+        gap: 10px;
+        flex: 1;
+        justify-content: flex-end;
+    }
+
+    .search-box {
+        flex: 1;
+        max-width: 240px;
+    }
+
+    .search-box input,
+    .search-box:focus-within input {
+        width: 100%;
+    }
+
+    .billboard {
+        height: 70vh;
+        min-height: 440px;
+    }
+
+    .billboard-title {
+        font-size: 36px;
+    }
+
+    .billboard-content {
+        max-width: 100%;
+        padding-left: 5%;
+        padding-right: 5%;
+    }
+
+    .billboard-synopsis {
+        -webkit-line-clamp: 2;
+    }
+
+    .modal-overview {
+        grid-template-columns: 1fr;
+        padding: 20px 24px 16px;
+        gap: 20px;
+    }
+
+    .episodes-section {
+        padding: 16px 24px 36px;
+    }
+
+    .modal-hero {
+        height: 300px;
+        padding: 24px;
+    }
+
+    .modal-title {
+        font-size: 28px;
+    }
+
+    .anime-card {
+        flex: 0 0 140px;
+    }
+
+    .card-poster {
+        height: 196px;
+    }
+
+    .rail-nav-btn {
+        display: none;
+    }
+}
+
+@media (max-width: 640px) {
+    .main-nav {
+        padding: 8px 4%;
+    }
+
+    .logo-banner {
+        display: none;
+    }
+
+    .logo-compact {
+        display: block;
+        height: 26px;
+    }
+
+    .search-box {
+        max-width: none;
+    }
+
+    .filter-dropdown,
+    .profile-menu {
+        flex-shrink: 0;
+    }
+
+    .section-page-header {
+        padding: 90px 5% 16px;
+    }
+
+    .section-page-header h2 {
+        font-size: 24px;
+    }
+
+    .billboard {
+        height: 60vh;
+        min-height: 380px;
+    }
+
+    .billboard-title {
+        font-size: 28px;
+    }
+
+    .billboard-genres {
+        display: none;
+    }
+
+    .billboard-actions {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .btn {
+        padding: 9px 16px;
+        font-size: 13px;
+    }
+
+    .content-rows {
+        margin-top: -40px;
+        gap: 24px;
+    }
+
+    .content-row {
+        padding: 0 5%;
+    }
+
+    .row-title {
+        font-size: 16px;
+    }
+
+    .anime-card {
+        flex: 0 0 110px;
+    }
+
+    .card-poster {
+        height: 156px;
+    }
+
+    .card-title {
+        font-size: 11px;
+    }
+
+    .catalogue-grid,
+    .planning-grid {
+        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+        gap: 12px;
+        padding: 0 5% 40px;
+    }
+
+    .modal-backdrop {
+        padding: 0;
+    }
+
+    .modal-container {
+        max-width: 100%;
+        border-radius: 0;
+        max-height: 100vh;
+        overflow-y: auto;
+    }
+
+    .modal-hero {
+        height: 220px;
+        padding: 16px;
+    }
+
+    .modal-title {
+        font-size: 22px;
+    }
+
+    .modal-actions {
+        flex-wrap: wrap;
+    }
+
+    .modal-overview {
+        grid-template-columns: 1fr;
+        padding: 20px 16px 16px;
+        gap: 20px;
+    }
+
+    .episodes-section {
+        padding: 16px 16px 32px;
+    }
+
+    .episodes-container.ep-grid-mode {
+        grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+    }
+
+    .ep-card {
+        padding: 8px 10px;
+        gap: 12px;
+    }
+
+    .ep-card-thumb-wrap {
+        width: 100px;
+        height: 58px;
+    }
+
+    .ep-card-num {
+        font-size: 14px;
+        min-width: 20px;
+    }
+
+    .player-topbar {
+        flex-wrap: wrap;
+        height: auto;
+        padding: 10px 14px;
+        gap: 8px;
+    }
+
+    .player-controls {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .account-container {
+        max-width: 100%;
+        margin: 0 12px;
+        padding: 24px 20px;
+    }
+
+    .account-sync-actions {
+        gap: 8px;
+    }
+}

@@ -1,0 +1,426 @@
+.content-rows {
+    position: relative;
+    z-index: 20;
+    margin-top: -80px;
+    padding-bottom: 60px;
+    display: flex;
+    flex-direction: column;
+    gap: 36px;
+}
+
+.content-row {
+    padding: 0 4%;
+}
+
+.row-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.row-title {
+    font-family: var(--font-heading);
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: #e5e5e5;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.row-see-all {
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    transition: color 0.2s;
+}
+
+.row-see-all:hover {
+    color: #fff;
+}
+
+.rail-container {
+    position: relative;
+}
+
+.rail-slider {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-behavior: smooth;
+    padding: 16px 4px 28px 4px;
+    scrollbar-width: none;
+}
+
+.rail-slider::-webkit-scrollbar {
+    display: none;
+}
+
+.rail-nav-btn {
+    position: absolute;
+    top: 16px;
+    bottom: 24px;
+    width: 44px;
+    background: rgba(20, 20, 20, 0.7);
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.25s, background-color 0.25s;
+    backdrop-filter: blur(4px);
+}
+
+.rail-container:hover .rail-nav-btn {
+    opacity: 1;
+}
+
+.rail-nav-btn:hover {
+    background: rgba(229, 9, 20, 0.85);
+}
+
+.rail-nav-btn.prev {
+    left: -4%;
+    border-radius: 0 4px 4px 0;
+}
+
+.rail-nav-btn.next {
+    right: -4%;
+    border-radius: 4px 0 0 4px;
+}
+
+.rail-nav-btn svg {
+    width: 24px;
+    height: 24px;
+}
+
+.anime-card {
+    flex: 0 0 185px;
+    position: relative;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: var(--bg-card);
+    cursor: pointer;
+    transition: var(--transition-smooth);
+    user-select: none;
+    box-shadow: var(--shadow-card);
+}
+
+.anime-card:hover {
+    transform: scale(1.06) translateY(-4px);
+    z-index: 40;
+    box-shadow: var(--shadow-card-hover);
+}
+
+.anime-card.has-trailer {
+    transform: scale(1.1) translateY(-6px);
+    z-index: 50;
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.8), 0 0 20px rgba(229, 9, 20, 0.25);
+}
+
+.card-watchlist-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 35;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(18, 18, 22, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #fff;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+    transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), background-color 0.2s, border-color 0.2s, opacity 0.2s;
+    opacity: 0;
+}
+
+.anime-card:hover .card-watchlist-btn {
+    opacity: 1;
+}
+
+.card-watchlist-btn.in-list {
+    opacity: 1;
+    background: rgba(229, 9, 20, 0.9);
+    border-color: #e50914;
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(229, 9, 20, 0.45);
+}
+
+.card-watchlist-btn:hover {
+    transform: scale(1.15);
+    background: rgba(255, 255, 255, 0.25);
+    border-color: #fff;
+    color: #fff;
+}
+
+.card-watchlist-btn.in-list:hover {
+    background: #e50914;
+    border-color: #ff3844;
+    transform: scale(1.15);
+}
+
+.card-trailer-slot {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 10;
+    border-radius: var(--radius-md);
+}
+
+.card-trailer-wrapper {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+    border-radius: var(--radius-md);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+}
+
+.card-trailer-wrapper.is-playing {
+    opacity: 1;
+}
+
+.card-trailer-iframe {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 400%;
+    height: 160%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    border: none;
+}
+
+.card-trailer-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    padding: 2px 7px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    background: rgba(229, 9, 20, 0.92);
+    color: #fff;
+    border-radius: 3px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+    pointer-events: none;
+    z-index: 25;
+}
+
+.card-sound-btn {
+    position: absolute;
+    bottom: 85px;
+    right: 8px;
+    z-index: 35;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(18, 18, 22, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+    transition: transform 0.2s ease, background-color 0.2s, border-color 0.2s;
+    pointer-events: auto;
+}
+
+.card-sound-btn:hover {
+    transform: scale(1.15);
+    background: rgba(229, 9, 20, 0.85);
+    border-color: #e50914;
+}
+
+.card-poster {
+    width: 100%;
+    height: 260px;
+    object-fit: cover;
+    display: block;
+    background: #202020;
+    transition: filter 0.3s ease;
+}
+
+.card-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    min-height: 58%;
+    padding: 32px 10px 10px 10px;
+    background: linear-gradient(
+        180deg,
+        rgba(18, 18, 22, 0) 0%,
+        rgba(18, 18, 22, 0.08) 20%,
+        rgba(18, 18, 22, 0.32) 42%,
+        rgba(18, 18, 22, 0.65) 65%,
+        rgba(18, 18, 22, 0.88) 84%,
+        rgba(18, 18, 22, 0.98) 100%
+    );
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 4px;
+    transition: background 0.3s ease;
+}
+
+.anime-card:hover .card-overlay {
+    background: linear-gradient(
+        180deg,
+        rgba(18, 18, 22, 0) 0%,
+        rgba(18, 18, 22, 0.12) 18%,
+        rgba(18, 18, 22, 0.42) 38%,
+        rgba(18, 18, 22, 0.75) 62%,
+        rgba(18, 18, 22, 0.94) 84%,
+        rgba(18, 18, 22, 1) 100%
+    );
+}
+
+.card-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
+}
+
+.card-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+}
+
+.card-badge {
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-weight: 600;
+    font-size: 10px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #d2d2d2;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.card-info-text {
+    color: #9ca3af;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.catalogue-grid {
+    padding: 0 4% 60px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 20px;
+}
+
+.catalogue-grid .anime-card {
+    flex: initial;
+    width: 100%;
+}
+
+.planning-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 24px;
+}
+
+.planning-tab {
+    padding: 8px 20px;
+    background: rgba(35, 35, 35, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 20px;
+    color: #ccc;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+}
+
+.planning-tab:hover {
+    background: rgba(50, 50, 50, 0.9);
+    color: #fff;
+}
+
+.planning-tab.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.planning-grid {
+    padding: 0 4% 60px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+    gap: 20px;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    color: #888;
+}
+
+.empty-state svg {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 16px;
+    stroke: #555;
+}
+
+.empty-state h3 {
+    color: #fff;
+    font-size: 22px;
+    margin-bottom: 8px;
+}
+
+.empty-state p {
+    font-size: 15px;
+    margin-bottom: 24px;
+}
+
+.catalog-error {
+    text-align: center;
+    padding: 160px 20px 80px;
+    max-width: 480px;
+    margin: 0 auto;
+}
+
+.catalog-error h3 {
+    color: #fff;
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+.catalog-error p {
+    color: var(--text-secondary);
+    font-size: 15px;
+    margin-bottom: 24px;
+}
