@@ -53,11 +53,31 @@ pub fn lang_dir() -> PathBuf {
     dir
 }
 
+pub const EMBEDDED_LANGS: &[(&str, &str)] = &[
+    ("fr.lang", include_str!("../../static/lang/fr.lang")),
+    ("en.lang", include_str!("../../static/lang/en.lang")),
+    ("ja.lang", include_str!("../../static/lang/ja.lang")),
+    ("es.lang", include_str!("../../static/lang/es.lang")),
+    ("de.lang", include_str!("../../static/lang/de.lang")),
+    ("it.lang", include_str!("../../static/lang/it.lang")),
+    ("pt.lang", include_str!("../../static/lang/pt.lang")),
+    ("ar.lang", include_str!("../../static/lang/ar.lang")),
+    ("ru.lang", include_str!("../../static/lang/ru.lang")),
+    ("ko.lang", include_str!("../../static/lang/ko.lang")),
+];
+
 pub fn init_app_dirs() {
     let _ = app_data_dir();
     let _ = userdata_path();
     let _ = session_path();
     let dir = lang_dir();
+
+    for (name, content) in EMBEDDED_LANGS {
+        let dest = dir.join(name);
+        if !dest.exists() {
+            let _ = fs::write(&dest, content);
+        }
+    }
 
     if let Ok(entries) = fs::read_dir("static/lang") {
         for entry in entries.flatten() {

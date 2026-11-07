@@ -57,6 +57,57 @@ pub fn respond_error(req: tiny_http::Request, status: u16, msg: &str) {
     let _ = req.respond(resp);
 }
 
+fn get_embedded_css(name: &str) -> Option<&'static str> {
+    match name {
+        "base.css" => Some(include_str!("../../static/css/base.css")),
+        "cards.css" => Some(include_str!("../../static/css/cards.css")),
+        "hero.css" => Some(include_str!("../../static/css/hero.css")),
+        "modal.css" => Some(include_str!("../../static/css/modal.css")),
+        "navbar.css" => Some(include_str!("../../static/css/navbar.css")),
+        "player.css" => Some(include_str!("../../static/css/player.css")),
+        "responsive.css" => Some(include_str!("../../static/css/responsive.css")),
+        "settings.css" => Some(include_str!("../../static/css/settings.css")),
+        "variables.css" => Some(include_str!("../../static/css/variables.css")),
+        _ => None,
+    }
+}
+
+fn get_embedded_js(name: &str) -> Option<&'static str> {
+    match name {
+        "api.js" => Some(include_str!("../../static/js/api.js")),
+        "app.js" => Some(include_str!("../../static/js/app.js")),
+        "hero.js" => Some(include_str!("../../static/js/hero.js")),
+        "i18n.js" => Some(include_str!("../../static/js/i18n.js")),
+        "modal.js" => Some(include_str!("../../static/js/modal.js")),
+        "navigation.js" => Some(include_str!("../../static/js/navigation.js")),
+        "planning.js" => Some(include_str!("../../static/js/planning.js")),
+        "player.js" => Some(include_str!("../../static/js/player.js")),
+        "rows.js" => Some(include_str!("../../static/js/rows.js")),
+        "search.js" => Some(include_str!("../../static/js/search.js")),
+        "settings.js" => Some(include_str!("../../static/js/settings.js")),
+        "state.js" => Some(include_str!("../../static/js/state.js")),
+        "userdata.js" => Some(include_str!("../../static/js/userdata.js")),
+        "utils.js" => Some(include_str!("../../static/js/utils.js")),
+        _ => None,
+    }
+}
+
+fn get_embedded_lang(name: &str) -> Option<&'static str> {
+    match name {
+        "ar.lang" => Some(include_str!("../../static/lang/ar.lang")),
+        "de.lang" => Some(include_str!("../../static/lang/de.lang")),
+        "en.lang" => Some(include_str!("../../static/lang/en.lang")),
+        "es.lang" => Some(include_str!("../../static/lang/es.lang")),
+        "fr.lang" => Some(include_str!("../../static/lang/fr.lang")),
+        "it.lang" => Some(include_str!("../../static/lang/it.lang")),
+        "ja.lang" => Some(include_str!("../../static/lang/ja.lang")),
+        "ko.lang" => Some(include_str!("../../static/lang/ko.lang")),
+        "pt.lang" => Some(include_str!("../../static/lang/pt.lang")),
+        "ru.lang" => Some(include_str!("../../static/lang/ru.lang")),
+        _ => None,
+    }
+}
+
 pub fn serve_static(req: tiny_http::Request, path: &str) -> bool {
     let clean = path.trim_start_matches('/');
     if clean.is_empty() || clean == "index.html" {
@@ -76,20 +127,26 @@ pub fn serve_static(req: tiny_http::Request, path: &str) -> bool {
     }
     if let Some(sub) = clean.strip_prefix("css/") {
         let disk_path = format!("static/css/{}", sub);
-        if Path::new(&disk_path).exists() {
-            if let Ok(c) = fs::read_to_string(&disk_path) {
-                respond_css(req, &c);
-                return true;
-            }
+        let content = if Path::new(&disk_path).exists() {
+            fs::read_to_string(&disk_path).ok()
+        } else {
+            get_embedded_css(sub).map(|s| s.to_string())
+        };
+        if let Some(c) = content {
+            respond_css(req, &c);
+            return true;
         }
     }
     if let Some(sub) = clean.strip_prefix("js/") {
         let disk_path = format!("static/js/{}", sub);
-        if Path::new(&disk_path).exists() {
-            if let Ok(c) = fs::read_to_string(&disk_path) {
-                respond_js(req, &c);
-                return true;
-            }
+        let content = if Path::new(&disk_path).exists() {
+            fs::read_to_string(&disk_path).ok()
+        } else {
+            get_embedded_js(sub).map(|s| s.to_string())
+        };
+        if let Some(c) = content {
+            respond_js(req, &c);
+            return true;
         }
     }
     if let Some(sub) = clean.strip_prefix("lang/") {
@@ -104,14 +161,17 @@ pub fn serve_static(req: tiny_http::Request, path: &str) -> bool {
             }
         }
         let disk_path = format!("static/lang/{}", sub);
-        if Path::new(&disk_path).exists() {
-            if let Ok(c) = fs::read_to_string(&disk_path) {
-                let resp = Response::from_string(c)
-                    .with_header(Header::from_bytes(&b"Content-Type"[..], &b"text/plain; charset=utf-8"[..]).unwrap())
-                    .with_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
-                let _ = req.respond(resp);
-                return true;
-            }
+        let content = if Path::new(&disk_path).exists() {
+            fs::read_to_string(&disk_path).ok()
+        } else {
+            get_embedded_lang(sub).map(|s| s.to_string())
+        };
+        if let Some(c) = content {
+            let resp = Response::from_string(c)
+                .with_header(Header::from_bytes(&b"Content-Type"[..], &b"text/plain; charset=utf-8"[..]).unwrap())
+                .with_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+            let _ = req.respond(resp);
+            return true;
         }
     }
     false

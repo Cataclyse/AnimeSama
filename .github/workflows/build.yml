@@ -1,11 +1,14 @@
-name: Build
+name: Build & Release
 
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    tags:
+      - 'v*'
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-linux:
@@ -25,11 +28,21 @@ jobs:
       - name: Build release binary
         run: cargo build --release
 
+      - name: Package Linux
+        run: |
+          mkdir -p dist-linux
+          cp target/release/animesama dist-linux/
+          cp -r static dist-linux/
+          tar -czf animesama-linux-x86_64.tar.gz -C dist-linux .
+          cp target/release/animesama animesama-linux-standalone
+
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
         with:
-          name: animesama-linux-x86_64
-          path: target/release/animesama
+          name: animesama-linux
+          path: |
+            animesama-linux-x86_64.tar.gz
+            animesama-linux-standalone
 
   build-windows:
     name: Build Windows
@@ -43,8 +56,62 @@ jobs:
       - name: Build release binary
         run: cargo build --release
 
+      - name: Package Windows
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist-windows
+          Copy-Item -Path target\release\animesama.exe -Destination dist-windows\
+          Copy-Item -Recurse -Path static -Destination dist-windows\
+          Compress-Archive -Path dist-windows\* -DestinationPath animesama-windows-x86_64.zip
+          Copy-Item -Path target\release\animesama.exe -Destination animesama.exe
+
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: animesama-windows-x86_64
-          path: target/release/animesama.exe
+          name: animesama-windows
+          path: |
+            animesama-windows-x86_64.zip
+            animesama.exe
+
+  release:
+    name: Publish GitHub Release
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: animesama-linux
+          path: release-assets
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: animesama-windows
+          path: release-assets
+
+      - name: Determine tag name
+        id: tag_name
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag_name.outputs.tag }}
+          name: Anime-Sama Desktop (${{ steps.tag_name.outputs.tag }})
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            release-assets/animesama-linux-x86_64.tar.gz
+            release-assets/animesama-linux-standalone
+            release-assets/animesama-windows-x86_64.zip
+            release-assets/animesama.exe
