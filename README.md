@@ -62,3 +62,9 @@ Accédez ensuite à l'interface sur [http://127.0.0.1:4567](http://127.0.0.1:456
 - `static/css/` : Feuilles de styles modulaires (thème sombre Netflix, animations, responsive design).
 - `static/js/` : Moteur frontend modulaire en JavaScript vanilla sans dépendance externe lourde.
 - `static/lang/` : Fichiers de langues `.lang` complets pour l'internationalisation.
+
+---
+
+## 📄 Licence
+
+Ce projet est sous licence **MIT**. Vous êtes libre de l'utiliser, l'étudier, le modifier et le redistribuer à condition de **conserver la notice de copyright originale et les crédits d'auteur** dans toutes les copies ou parties substantielles du logiciel. Consultez le fichier [LICENSE](LICENSE) pour plus de détails.

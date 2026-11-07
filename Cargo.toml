@@ -2,6 +2,8 @@
 name = "animesama"
 version = "0.1.0"
 edition = "2021"
+authors = ["Cataclyse"]
+license = "MIT"
 
 [dependencies]
 tiny_http = "0.12"
