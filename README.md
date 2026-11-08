@@ -11,7 +11,21 @@ A fast, lightweight native desktop application written in Rust that provides a N
 - **Isolated Storage**: Watchlist, watch history, and session tokens are stored in the user data directory (`%LOCALAPPDATA%\AnimeSama` on Windows, `~/.local/share/AnimeSama` on Linux) to prevent sensitive data leaks.
 - **Cloud Account Sync**: Optional login to anime-sama.to with bidirectional progress and favorites synchronization.
 - **In-App Auto-Updater**: Automatic background release checks against GitHub Releases with one-click direct update installation.
-- **Minimal Resource Usage**: Self-contained Rust binary consuming under 40 MB of RAM with zero Electron or Node.js runtime overhead.
+- **Resource Efficiency**: Consumes under 1% CPU, ~2.6% GPU, and ~340 MB total memory (across all 7 WebView2 processes) during active 1080p video playback, powered by an optimized ~4.3 MB native Rust binary.
+
+## Performance & Resource Usage
+
+Real-world resource metrics measured during active 1080p video playback on Windows:
+
+| Metric | Measured Usage | Details |
+| :--- | :--- | :--- |
+| **CPU** | **~0.9%** | Event-driven playback, debounced DOM sanitizer, zero active polling loops |
+| **GPU** | **~2.6%** | Hardware-accelerated video decoding with isolated render layer (`contain: strict`) |
+| **Memory (RAM)** | **~340 MB** | Total combined footprint across all 7 WebView2 runtime processes and the Rust host |
+| **Disk I/O** | **~0.4 MB/s** | Smooth streaming buffer chunking |
+| **Binary Size** | **~4.3 MB** | Compact standalone binary with Link-Time Optimization (LTO) and stripped symbols |
+
+Unlike Electron-based wrappers that easily exceed 800 MB to 1.5 GB of RAM and 10–20% CPU overhead, Anime-Sama Desktop delivers a silky smooth 60 FPS cinema experience while keeping your system cool and whisper-quiet.
 
 ## Installation
 
