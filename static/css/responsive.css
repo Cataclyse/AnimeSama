@@ -5,10 +5,14 @@
 
     .nav-links {
         gap: 12px;
+        white-space: nowrap !important;
+        flex-shrink: 0 !important;
     }
 
     .nav-link {
         font-size: 13px;
+        white-space: nowrap !important;
+        flex-shrink: 0 !important;
     }
 
     .search-box input {

@@ -30,26 +30,34 @@ iframe {{
     height: 0 !important;
 }}
 
-.jw-controlbar, .jw-controls, .jw-controls-backdrop, .jw-display-icon-container,
+.jw-controlbar, .jw-controls-backdrop, .jw-display-icon-container,
 .jw-display-icon-display, .jw-icon-display, .jw-svg-icon, .jw-preview,
-.jw-pause-overlay, .jw-overlays, .jw-overlay, .jw-display, .jw-dock, .jw-dock-btn,
-.jw-related, .jw-nextup, .jw-card, .jw-rightclick, .jw-flag-paused .jw-overlays,
-.jw-flag-paused .jw-display, .jw-flag-paused [class*="download" i],
+.jw-pause-overlay, .jw-dock, .jw-dock-btn,
+.jw-related, .jw-nextup, .jw-card, .jw-rightclick,
+a.jw-download, .jw-svg-icon-download, a[download], a[href*="download" i], a[href*="/dl" i],
+button[class*="download" i], button[id*="download" i], .vidmoly-download,
 .vjs-control-bar, .vjs-big-play-button, .vjs-loading-spinner, .vjs-poster,
-.plyr__controls, .plyr__control--overlaid, .plyr__poster, .plyr__captions, .plyr__badge,
-.plyr--paused .plyr__control--overlaid, .voe-title, .voe-watermark,
-[class*="watermark" i], div[class*="play-wrapper" i], div[id*="play-wrapper" i],
-div[class*="loading-overlay" i], div[class*="center-icon" i],
-.btn-play, .play-button, .overlay-play, .clappr-controls, .fp-ui, .control-bar, .mejs__controls,
+.plyr__controls, .plyr__poster, .plyr__captions, .plyr__badge,
+.voe-title, .voe-watermark, [class*="watermark" i], [id*="watermark" i],
+.clappr-controls, .fp-ui, .control-bar, .mejs__controls,
 #controls, .controls, [class*="controlbar" i], [class*="player-controls" i],
-.vjs-text-track-display, .jw-title, [class*="download" i], [id*="download" i],
-a[href*="download" i], a[download], button[class*="download" i], .vidmoly-download, div[class*="moly" i] {{
+.vjs-text-track-display, .jw-title {{
     display: none !important;
     opacity: 0 !important;
     visibility: hidden !important;
     pointer-events: none !important;
-    width: 0 !important;
-    height: 0 !important;
+}}
+
+.plyr__control--overlaid {{
+    opacity: 0 !important;
+    pointer-events: none !important;
+}}
+
+.jw-display, .jw-overlays, .plyr, .plyr__video-wrapper {{
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: transparent !important;
 }}
 
 video, .jw-media, .jw-video {{
@@ -407,8 +415,15 @@ div[class*="cf-turnstile" i] {{
         if (el.classList) {{
             
             if (
-                (el.classList.contains('jwplayer') || el.classList.contains('video-js')) &&
-                (el.parentElement === document.body || (el.parentElement && (el.parentElement.id === 'vplayer' || el.parentElement.id === 'player')))
+                el.classList.contains('jwplayer') ||
+                el.classList.contains('video-js') ||
+                el.classList.contains('plyr') ||
+                el.classList.contains('plyr__video-wrapper') ||
+                el.classList.contains('jw-display') ||
+                el.classList.contains('jw-overlays') ||
+                el.classList.contains('jw-media') ||
+                el.classList.contains('jw-video') ||
+                el.classList.contains('plyr__control--overlaid')
             ) {{
                 return true;
             }}
@@ -474,7 +489,7 @@ div[class*="cf-turnstile" i] {{
                     var isSuspicious = (pos === 'fixed' || (pos === 'absolute' && z >= 5)) && coversArea;
 
                     if (isSuspicious) {{
-                        if (!topEl.querySelector('video') && !topEl.querySelector('.jw-controlbar') && !topEl.classList.contains('jw-media')) {{
+                        if (!topEl.querySelector('video') && !topEl.querySelector('.jw-controlbar') && !topEl.classList.contains('jw-media') && !topEl.querySelector('.plyr') && !topEl.classList.contains('plyr')) {{
                             topEl.remove();
                             break;
                         }}
@@ -610,9 +625,10 @@ div[class*="cf-turnstile" i] {{
             }}
 
             var residues = document.querySelectorAll(
-                '.jw-pause-overlay, .jw-overlays, .jw-related, .jw-dock, .jw-nextup, ' +
-                '[class*="download" i], [id*="download" i], a[href*="download" i], a[download], button[class*="download" i], ' +
-                '.plyr__control--overlaid, .plyr__controls, .plyr__poster, [class*="watermark" i], .voe-title, .voe-watermark'
+                '.jw-pause-overlay, .jw-related, .jw-dock, .jw-dock-btn, .jw-nextup, ' +
+                'a.jw-download, .jw-svg-icon-download, a[download], a[href*="download" i], a[href*="/dl" i], ' +
+                'button[class*="download" i], button[id*="download" i], .vidmoly-download, ' +
+                '[class*="watermark" i], [id*="watermark" i], .voe-title, .voe-watermark'
             );
             for (var r = 0; r < residues.length; r++) {{
                 if (isProtectedPlayerElement(residues[r])) continue;
@@ -649,12 +665,8 @@ div[class*="cf-turnstile" i] {{
                 return;
             }}
             try {{
-                var v = document.querySelector('video');
-                if (v && v.paused) {{
-                    var p = v.play();
-                    if (p && typeof p.catch === 'function') p.catch(function(){{}});
-                    userStarted = true;
-                }}
+                triggerHosterPlay();
+                userStarted = true;
             }} catch(err) {{}}
         }}
         document.addEventListener('click', tryStart, {{ capture: true }});
@@ -702,19 +714,9 @@ div[class*="cf-turnstile" i] {{
     }} catch(e) {{}}
 
     var lastReported = 0;
-    var maxTimeSeen = 0;
     function report(v, force) {{
         if (!v || isNaN(v.currentTime)) return;
         var now = Date.now();
-        if (v.currentTime > maxTimeSeen) {{
-            maxTimeSeen = v.currentTime;
-        }}
-        
-        if (maxTimeSeen > 5 && v.currentTime < maxTimeSeen - 15) {{
-            return;
-        }}
-        
-        
         if (resumeTarget > 2 && !v._asSeekCompleted && v.currentTime < resumeTarget - 2) {{
             return;
         }}
@@ -826,7 +828,8 @@ div[class*="cf-turnstile" i] {{
     function triggerHosterPlay() {{
         try {{
             if (window.player && typeof window.player.play === 'function') {{
-                window.player.play();
+                var p1 = window.player.play();
+                if (p1 && typeof p1.catch === 'function') p1.catch(function(){{}});
             }}
         }} catch(e) {{}}
         try {{
@@ -837,17 +840,17 @@ div[class*="cf-turnstile" i] {{
         }} catch(e) {{}}
         try {{
             var playBtns = document.querySelectorAll(
-                '.plyr__control--overlaid, button[data-plyr="play"], .play-wrapper, .play-button, .btn-play, .overlay-play, .vjs-big-play-button, .jw-display-icon-display, [aria-label="Play"]'
+                'button.plyr__control--overlaid, button[data-plyr="play"], button.vjs-big-play-button, button.play-button, button.btn-play, .jw-display-icon-display'
             );
             for (var b = 0; b < playBtns.length; b++) {{
-                playBtns[b].click();
+                try {{ playBtns[b].click(); }} catch(err) {{}}
             }}
         }} catch(e) {{}}
         try {{
             var v = document.querySelector('video');
             if (v && v.paused) {{
-                var p = v.play();
-                if (p && typeof p.catch === 'function') p.catch(function(){{}});
+                var p2 = v.play();
+                if (p2 && typeof p2.catch === 'function') p2.catch(function(){{}});
             }}
         }} catch(e) {{}}
     }}
@@ -855,7 +858,7 @@ div[class*="cf-turnstile" i] {{
     function triggerHosterPause() {{
         try {{
             var v = document.querySelector('video');
-            if (v) v.pause();
+            if (v && !v.paused) v.pause();
         }} catch(e) {{}}
         try {{
             if (window.player && typeof window.player.pause === 'function') {{
@@ -909,8 +912,21 @@ div[class*="cf-turnstile" i] {{
         var v = document.querySelector('video');
         if (ev.data.type === 'AS_SEEK_TO') {{
             var target = parseFloat(ev.data.time);
-            if (v && !isNaN(target)) {{
-                try {{ v.currentTime = target; }} catch(err) {{}}
+            if (!isNaN(target)) {{
+                try {{
+                    if (window.jwplayer && typeof window.jwplayer === 'function') {{
+                        var jwp = window.jwplayer();
+                        if (jwp && typeof jwp.seek === 'function') jwp.seek(target);
+                    }}
+                }} catch(e) {{}}
+                try {{
+                    if (window.player && typeof window.player.currentTime !== 'undefined') {{
+                        window.player.currentTime = target;
+                    }}
+                }} catch(e) {{}}
+                if (v) {{
+                    try {{ v.currentTime = target; }} catch(err) {{}}
+                }}
             }}
         }} else if (ev.data.type === 'AS_TOGGLE_PLAY') {{
             togglePlay();
@@ -921,16 +937,53 @@ div[class*="cf-turnstile" i] {{
         }} else if (ev.data.type === 'AS_SEEK_RELATIVE') {{
             var delta = parseFloat(ev.data.delta) || 0;
             if (v && !isNaN(v.currentTime)) {{
-                try {{ v.currentTime = Math.max(0, Math.min(v.duration || Infinity, v.currentTime + delta)); }} catch(err) {{}}
+                var newT = Math.max(0, Math.min(v.duration || Infinity, v.currentTime + delta));
+                try {{
+                    if (window.jwplayer && typeof window.jwplayer === 'function') {{
+                        var jwp2 = window.jwplayer();
+                        if (jwp2 && typeof jwp2.seek === 'function') jwp2.seek(newT);
+                    }}
+                }} catch(e) {{}}
+                try {{
+                    if (window.player && typeof window.player.currentTime !== 'undefined') {{
+                        window.player.currentTime = newT;
+                    }}
+                }} catch(e) {{}}
+                try {{ v.currentTime = newT; }} catch(err) {{}}
             }}
         }} else if (ev.data.type === 'AS_SET_VOLUME') {{
             var vol = parseFloat(ev.data.volume);
-            if (v && !isNaN(vol)) {{
-                try {{ v.volume = Math.max(0, Math.min(1, vol)); }} catch(err) {{}}
+            if (!isNaN(vol)) {{
+                try {{
+                    if (window.jwplayer && typeof window.jwplayer === 'function') {{
+                        var jwpV = window.jwplayer();
+                        if (jwpV && typeof jwpV.setVolume === 'function') jwpV.setVolume(Math.round(vol * 100));
+                    }}
+                }} catch(e) {{}}
+                try {{
+                    if (window.player && typeof window.player.volume !== 'undefined') {{
+                        window.player.volume = vol;
+                    }}
+                }} catch(e) {{}}
+                if (v) {{
+                    try {{ v.volume = Math.max(0, Math.min(1, vol)); }} catch(err) {{}}
+                }}
             }}
         }} else if (ev.data.type === 'AS_SET_MUTED') {{
+            var isMuted = !!ev.data.muted;
+            try {{
+                if (window.jwplayer && typeof window.jwplayer === 'function') {{
+                    var jwpM = window.jwplayer();
+                    if (jwpM && typeof jwpM.setMute === 'function') jwpM.setMute(isMuted);
+                }}
+            }} catch(e) {{}}
+            try {{
+                if (window.player && typeof window.player.muted !== 'undefined') {{
+                    window.player.muted = isMuted;
+                }}
+            }} catch(e) {{}}
             if (v) {{
-                try {{ v.muted = !!ev.data.muted; }} catch(err) {{}}
+                try {{ v.muted = isMuted; }} catch(err) {{}}
             }}
         }} else if (ev.data.type === 'AS_SET_PLAYBACK_RATE') {{
             var rate = parseFloat(ev.data.rate);
@@ -972,17 +1025,9 @@ pub fn generate_resume_only_script(resume_seconds: f64, episode_num: u32) -> Str
     }} catch(e) {{}}
 
     var lastReported = 0;
-    var maxTimeSeen = 0;
     function report(v, force) {{
         if (!v || isNaN(v.currentTime)) return;
         var now = Date.now();
-        if (v.currentTime > maxTimeSeen) {{
-            maxTimeSeen = v.currentTime;
-        }}
-        
-        if (maxTimeSeen > 5 && v.currentTime < maxTimeSeen - 15) {{
-            return;
-        }}
         if (resumeTarget > 2 && !v._asSeekCompleted && v.currentTime < resumeTarget - 2) {{
             return;
         }}
@@ -1092,7 +1137,8 @@ pub fn generate_resume_only_script(resume_seconds: f64, episode_num: u32) -> Str
     function triggerHosterPlay() {{
         try {{
             if (window.player && typeof window.player.play === 'function') {{
-                window.player.play();
+                var p1 = window.player.play();
+                if (p1 && typeof p1.catch === 'function') p1.catch(function(){{}});
             }}
         }} catch(e) {{}}
         try {{
@@ -1103,17 +1149,17 @@ pub fn generate_resume_only_script(resume_seconds: f64, episode_num: u32) -> Str
         }} catch(e) {{}}
         try {{
             var playBtns = document.querySelectorAll(
-                '.plyr__control--overlaid, button[data-plyr="play"], .play-wrapper, .play-button, .btn-play, .overlay-play, .vjs-big-play-button, .jw-display-icon-display, [aria-label="Play"]'
+                'button.plyr__control--overlaid, button[data-plyr="play"], button.vjs-big-play-button, button.play-button, button.btn-play, .jw-display-icon-display'
             );
             for (var b = 0; b < playBtns.length; b++) {{
-                playBtns[b].click();
+                try {{ playBtns[b].click(); }} catch(err) {{}}
             }}
         }} catch(e) {{}}
         try {{
             var v = document.querySelector('video');
             if (v && v.paused) {{
-                var p = v.play();
-                if (p && typeof p.catch === 'function') p.catch(function(){{}});
+                var p2 = v.play();
+                if (p2 && typeof p2.catch === 'function') p2.catch(function(){{}});
             }}
         }} catch(e) {{}}
     }}
@@ -1121,7 +1167,7 @@ pub fn generate_resume_only_script(resume_seconds: f64, episode_num: u32) -> Str
     function triggerHosterPause() {{
         try {{
             var v = document.querySelector('video');
-            if (v) v.pause();
+            if (v && !v.paused) v.pause();
         }} catch(e) {{}}
         try {{
             if (window.player && typeof window.player.pause === 'function') {{
@@ -1175,8 +1221,21 @@ pub fn generate_resume_only_script(resume_seconds: f64, episode_num: u32) -> Str
         var v = document.querySelector('video');
         if (ev.data.type === 'AS_SEEK_TO') {{
             var target = parseFloat(ev.data.time);
-            if (v && !isNaN(target)) {{
-                try {{ v.currentTime = target; }} catch(err) {{}}
+            if (!isNaN(target)) {{
+                try {{
+                    if (window.jwplayer && typeof window.jwplayer === 'function') {{
+                        var jwp = window.jwplayer();
+                        if (jwp && typeof jwp.seek === 'function') jwp.seek(target);
+                    }}
+                }} catch(e) {{}}
+                try {{
+                    if (window.player && typeof window.player.currentTime !== 'undefined') {{
+                        window.player.currentTime = target;
+                    }}
+                }} catch(e) {{}}
+                if (v) {{
+                    try {{ v.currentTime = target; }} catch(err) {{}}
+                }}
             }}
         }} else if (ev.data.type === 'AS_TOGGLE_PLAY') {{
             togglePlay();
@@ -1187,16 +1246,53 @@ pub fn generate_resume_only_script(resume_seconds: f64, episode_num: u32) -> Str
         }} else if (ev.data.type === 'AS_SEEK_RELATIVE') {{
             var delta = parseFloat(ev.data.delta) || 0;
             if (v && !isNaN(v.currentTime)) {{
-                try {{ v.currentTime = Math.max(0, Math.min(v.duration || Infinity, v.currentTime + delta)); }} catch(err) {{}}
+                var newT = Math.max(0, Math.min(v.duration || Infinity, v.currentTime + delta));
+                try {{
+                    if (window.jwplayer && typeof window.jwplayer === 'function') {{
+                        var jwp2 = window.jwplayer();
+                        if (jwp2 && typeof jwp2.seek === 'function') jwp2.seek(newT);
+                    }}
+                }} catch(e) {{}}
+                try {{
+                    if (window.player && typeof window.player.currentTime !== 'undefined') {{
+                        window.player.currentTime = newT;
+                    }}
+                }} catch(e) {{}}
+                try {{ v.currentTime = newT; }} catch(err) {{}}
             }}
         }} else if (ev.data.type === 'AS_SET_VOLUME') {{
             var vol = parseFloat(ev.data.volume);
-            if (v && !isNaN(vol)) {{
-                try {{ v.volume = Math.max(0, Math.min(1, vol)); }} catch(err) {{}}
+            if (!isNaN(vol)) {{
+                try {{
+                    if (window.jwplayer && typeof window.jwplayer === 'function') {{
+                        var jwpV = window.jwplayer();
+                        if (jwpV && typeof jwpV.setVolume === 'function') jwpV.setVolume(Math.round(vol * 100));
+                    }}
+                }} catch(e) {{}}
+                try {{
+                    if (window.player && typeof window.player.volume !== 'undefined') {{
+                        window.player.volume = vol;
+                    }}
+                }} catch(e) {{}}
+                if (v) {{
+                    try {{ v.volume = Math.max(0, Math.min(1, vol)); }} catch(err) {{}}
+                }}
             }}
         }} else if (ev.data.type === 'AS_SET_MUTED') {{
+            var isMuted = !!ev.data.muted;
+            try {{
+                if (window.jwplayer && typeof window.jwplayer === 'function') {{
+                    var jwpM = window.jwplayer();
+                    if (jwpM && typeof jwpM.setMute === 'function') jwpM.setMute(isMuted);
+                }}
+            }} catch(e) {{}}
+            try {{
+                if (window.player && typeof window.player.muted !== 'undefined') {{
+                    window.player.muted = isMuted;
+                }}
+            }} catch(e) {{}}
             if (v) {{
-                try {{ v.muted = !!ev.data.muted; }} catch(err) {{}}
+                try {{ v.muted = isMuted; }} catch(err) {{}}
             }}
         }} else if (ev.data.type === 'AS_SET_PLAYBACK_RATE') {{
             var rate = parseFloat(ev.data.rate);

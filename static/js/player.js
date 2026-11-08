@@ -97,8 +97,7 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
         playerState.paused = false;
         playerState.nextPromptActive = false;
         playerState.skipData = null;
-        playerState.introSkipped = false;
-        playerState.endingSkipped = false;
+        playerState.fallbackSkippedAt = null;
 
         const animeTitle = State.currentAnime ? State.currentAnime.title : slug;
         loadSkipTimes(animeTitle, episodeIndex + 1);
@@ -264,7 +263,11 @@ function togglePlayPause() {
         willPlay = playerState.paused;
     }
 
-    sendFrameMessage({ type: 'AS_TOGGLE_PLAY' });
+    if (willPlay) {
+        sendFrameMessage({ type: 'AS_PLAY' });
+    } else {
+        sendFrameMessage({ type: 'AS_PAUSE' });
+    }
     showCenterPulse(willPlay ? 'play' : 'pause');
     resetIdleTimer();
 }
@@ -427,7 +430,7 @@ function checkSkipIntro(currentTime) {
         const op = playerState.skipData.op;
         const ed = playerState.skipData.ed;
 
-        if (op && !playerState.introSkipped && currentTime >= op.start - 0.5 && currentTime < op.end) {
+        if (op && currentTime >= op.start - 0.5 && currentTime < op.end) {
             skipBtn.style.display = 'flex';
             skipBtn.dataset.skipTarget = op.end;
             skipBtn.dataset.skipType = 'op';
@@ -438,7 +441,7 @@ function checkSkipIntro(currentTime) {
             return;
         }
 
-        if (ed && !playerState.endingSkipped && currentTime >= ed.start - 0.5 && currentTime < ed.end) {
+        if (ed && currentTime >= ed.start - 0.5 && currentTime < ed.end) {
             skipBtn.style.display = 'flex';
             skipBtn.dataset.skipTarget = ed.end;
             skipBtn.dataset.skipType = 'ed';
@@ -453,7 +456,13 @@ function checkSkipIntro(currentTime) {
         return;
     }
 
-    if (!playerState.introSkipped && currentTime >= 5 && currentTime <= 210) {
+    if (playerState.fallbackSkippedAt !== null) {
+        if (currentTime < playerState.fallbackSkippedAt - 2) {
+            playerState.fallbackSkippedAt = null;
+        }
+    }
+
+    if (playerState.fallbackSkippedAt === null && currentTime >= 5 && currentTime <= 210) {
         skipBtn.style.display = 'flex';
         skipBtn.dataset.skipTarget = 'relative_85';
         skipBtn.dataset.skipType = 'fallback';
@@ -471,10 +480,8 @@ function skipIntro() {
     const target = skipBtn ? skipBtn.dataset.skipTarget : null;
     const type = skipBtn ? skipBtn.dataset.skipType : null;
 
-    if (type === 'ed') {
-        playerState.endingSkipped = true;
-    } else {
-        playerState.introSkipped = true;
+    if (type === 'fallback') {
+        playerState.fallbackSkippedAt = playerState.currentTime;
     }
 
     if (target && target !== 'relative_85') {
