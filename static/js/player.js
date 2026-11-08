@@ -18,6 +18,39 @@ let playerState = {
     clickTimeout: null
 };
 
+let lastDiscordRpcSend = 0;
+let lastDiscordRpcStatus = null;
+let lastDiscordRpcEpisode = null;
+
+function syncDiscordRpc(force = false) {
+    const now = Date.now();
+    const isPaused = !!playerState.paused;
+    const currentStatus = isPaused ? 'paused' : 'playing';
+    const epNum = State.currentEpIndex !== undefined ? (State.currentEpIndex + 1) : 1;
+    if (!force && lastDiscordRpcStatus === currentStatus && lastDiscordRpcEpisode === epNum && (now - lastDiscordRpcSend < 15000)) {
+        return;
+    }
+    lastDiscordRpcSend = now;
+    lastDiscordRpcStatus = currentStatus;
+    lastDiscordRpcEpisode = epNum;
+
+    const animeTitle = State.currentAnime ? State.currentAnime.title : (State.currentEpisodes ? State.currentEpisodes.slug : '');
+    const season = State.currentEpisodes ? State.currentEpisodes.season : null;
+
+    fetch('/api/rpc/presence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            title: animeTitle,
+            episode: epNum,
+            season: season,
+            status: currentStatus,
+            duration: Math.floor(playerState.duration || 0),
+            current_time: Math.floor(playerState.currentTime || 0)
+        })
+    }).catch(() => {});
+}
+
 const VIDEO_FILTERS = {
     normal: 'none',
     auto: 'contrast(1.15) saturate(1.4) brightness(1.04)',
@@ -272,6 +305,7 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
         startPlayerPolling();
         updatePlayPauseButton(true);
         syncPlayerMediaMetadata();
+        syncDiscordRpc(true);
 
         renderScrubber(resumeSeconds, estimatedDuration, 0);
         renderTimeDisplay(resumeSeconds, estimatedDuration);
@@ -397,6 +431,7 @@ function syncPlaybackState(currentTime, duration, bufferedEnd, paused, volume, m
     updateVolumeUI(playerState.volume, playerState.muted);
     checkSkipIntro(currentTime);
     checkNextEpisodePrompt(currentTime, playerState.duration);
+    syncDiscordRpc(false);
 }
 
 function renderScrubber(currentTime, duration, bufferedEnd) {
@@ -463,6 +498,7 @@ function togglePlayPause() {
         sendFrameMessage({ type: 'AS_PAUSE' });
     }
     showCenterPulse(willPlay ? 'play' : 'pause');
+    syncDiscordRpc(true);
     resetIdleTimer();
 }
 
@@ -1180,6 +1216,9 @@ function changeEpisode(delta) {
 }
 
 function closePlayerModal() {
+    lastDiscordRpcStatus = null;
+    lastDiscordRpcEpisode = null;
+    fetch('/api/rpc/clear', { method: 'POST' }).catch(() => {});
     stopDynamicFilter();
     flushCurrentPlayback();
     stopPlayerPolling();

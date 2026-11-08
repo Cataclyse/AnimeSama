@@ -95,6 +95,7 @@ function setupEventListeners() {
     DOM.autoSyncCheckbox.addEventListener('change', handleAutoSyncToggle);
     DOM.adShieldCheckbox.addEventListener('change', handleAdShieldToggle);
     if (DOM.autoUpdateCheckbox) DOM.autoUpdateCheckbox.addEventListener('change', handleAutoUpdateToggle);
+    if (DOM.discordRpcCheckbox) DOM.discordRpcCheckbox.addEventListener('change', handleDiscordRpcToggle);
 
     
     window.addEventListener('message', (event) => {

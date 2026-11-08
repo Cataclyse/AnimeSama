@@ -2,6 +2,7 @@
 
 mod adblock;
 mod catalogue;
+mod discord;
 mod proxy;
 mod scraper;
 mod server;
@@ -48,6 +49,8 @@ fn main() {
 
     let port = find_available_port(48567);
     let app_url = format!("http://127.0.0.1:{}", port);
+
+    discord::init_discord_rpc();
 
     let (_state, _server_thread) = server::start_server(port);
 

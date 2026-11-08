@@ -102,6 +102,7 @@ const DOM = {
     autoSyncCheckbox: document.getElementById('autoSyncCheckbox'),
     adShieldCheckbox: document.getElementById('adShieldCheckbox'),
     autoUpdateCheckbox: document.getElementById('autoUpdateCheckbox'),
+    discordRpcCheckbox: document.getElementById('discordRpcCheckbox'),
     syncAutoBtn: document.getElementById('syncAutoBtn'),
     syncStatus: document.getElementById('syncStatus'),
     accountLogoutBtn: document.getElementById('accountLogoutBtn'),

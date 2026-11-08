@@ -343,6 +343,7 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
                 "auto_sync": data.auto_sync,
                 "ad_shield": data.ad_shield,
                 "auto_update": data.auto_update,
+                "discord_rpc": data.discord_rpc,
                 "version": crate::update::CURRENT_VERSION
             }).to_string());
         }
@@ -354,7 +355,7 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
             let enabled = parsed.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false);
 
             let data = state.user_mgr.set_auto_sync(enabled);
-            respond_json(req, &json!({ "auto_sync": data.auto_sync, "ad_shield": data.ad_shield, "auto_update": data.auto_update }).to_string());
+            respond_json(req, &json!({ "auto_sync": data.auto_sync, "ad_shield": data.ad_shield, "auto_update": data.auto_update, "discord_rpc": data.discord_rpc }).to_string());
         }
 
         ("POST", "/api/settings/ad-shield") => {
@@ -364,7 +365,7 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
             let enabled = parsed.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true);
 
             let data = state.user_mgr.set_ad_shield(enabled);
-            respond_json(req, &json!({ "auto_sync": data.auto_sync, "ad_shield": data.ad_shield, "auto_update": data.auto_update }).to_string());
+            respond_json(req, &json!({ "auto_sync": data.auto_sync, "ad_shield": data.ad_shield, "auto_update": data.auto_update, "discord_rpc": data.discord_rpc }).to_string());
         }
 
         ("POST", "/api/settings/auto-update") => {
@@ -374,7 +375,44 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
             let enabled = parsed.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true);
 
             let data = state.user_mgr.set_auto_update(enabled);
-            respond_json(req, &json!({ "auto_sync": data.auto_sync, "ad_shield": data.ad_shield, "auto_update": data.auto_update }).to_string());
+            respond_json(req, &json!({ "auto_sync": data.auto_sync, "ad_shield": data.ad_shield, "auto_update": data.auto_update, "discord_rpc": data.discord_rpc }).to_string());
+        }
+
+        ("POST", "/api/settings/discord-rpc") => {
+            let mut content = String::new();
+            let _ = req.as_reader().read_to_string(&mut content);
+            let parsed: serde_json::Value = serde_json::from_str(&content).unwrap_or_default();
+            let enabled = parsed.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true);
+
+            let data = state.user_mgr.set_discord_rpc(enabled);
+            if !enabled {
+                crate::discord::clear_presence();
+            }
+            respond_json(req, &json!({ "auto_sync": data.auto_sync, "ad_shield": data.ad_shield, "auto_update": data.auto_update, "discord_rpc": data.discord_rpc }).to_string());
+        }
+
+        ("POST", "/api/rpc/presence") => {
+            if !state.user_mgr.get_data().discord_rpc {
+                respond_json(req, &json!({ "status": "disabled" }).to_string());
+                return;
+            }
+            let mut content = String::new();
+            let _ = req.as_reader().read_to_string(&mut content);
+            let parsed: Result<crate::discord::PresencePayload, _> = serde_json::from_str(&content);
+            match parsed {
+                Ok(payload) => {
+                    crate::discord::update_presence(payload);
+                    respond_json(req, &json!({ "status": "ok" }).to_string());
+                }
+                Err(_) => {
+                    respond_error(req, 400, "Payload RPC invalide");
+                }
+            }
+        }
+
+        ("POST", "/api/rpc/clear") => {
+            crate::discord::clear_presence();
+            respond_json(req, &json!({ "status": "cleared" }).to_string());
         }
 
         ("POST", "/api/sync/auto") => {

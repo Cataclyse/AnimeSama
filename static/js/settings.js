@@ -42,6 +42,7 @@ async function openAccountModal() {
             if (DOM.autoSyncCheckbox) DOM.autoSyncCheckbox.checked = !!d.auto_sync;
             if (DOM.adShieldCheckbox) DOM.adShieldCheckbox.checked = d.ad_shield !== false;
             if (DOM.autoUpdateCheckbox) DOM.autoUpdateCheckbox.checked = d.auto_update !== false;
+            if (DOM.discordRpcCheckbox) DOM.discordRpcCheckbox.checked = d.discord_rpc !== false;
             if (d.version) updateCurrentVersionDisplay(d.version);
         })
         .catch(() => {});
@@ -186,6 +187,21 @@ async function handleAutoUpdateToggle(e) {
             body: JSON.stringify({ enabled })
         });
         showToast(enabled ? t('settings.autoupdate_enabled', 'Mise à jour automatique activée') : t('settings.autoupdate_disabled', 'Mise à jour automatique désactivée'));
+    } catch (err) {
+        showToast(t('settings.save_error', 'Impossible de sauvegarder ce réglage'));
+        e.target.checked = !enabled;
+    }
+}
+
+async function handleDiscordRpcToggle(e) {
+    const enabled = e.target.checked;
+    try {
+        await fetch('/api/settings/discord-rpc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled })
+        });
+        showToast(enabled ? t('settings.discord_rpc_enabled', 'Discord Rich Presence activé') : t('settings.discord_rpc_disabled', 'Discord Rich Presence désactivé'));
     } catch (err) {
         showToast(t('settings.save_error', 'Impossible de sauvegarder ce réglage'));
         e.target.checked = !enabled;
@@ -564,6 +580,7 @@ fetch('/api/settings')
         if (DOM.autoSyncCheckbox) DOM.autoSyncCheckbox.checked = !!d.auto_sync;
         if (DOM.adShieldCheckbox) DOM.adShieldCheckbox.checked = d.ad_shield !== false;
         if (DOM.autoUpdateCheckbox) DOM.autoUpdateCheckbox.checked = d.auto_update !== false;
+        if (DOM.discordRpcCheckbox) DOM.discordRpcCheckbox.checked = d.discord_rpc !== false;
         if (d.version) updateCurrentVersionDisplay(d.version);
 
         if (appSettings.auto_update !== false) {

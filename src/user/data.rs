@@ -23,6 +23,8 @@ pub struct UserData {
     pub ad_shield: bool,
     #[serde(default = "default_true")]
     pub auto_update: bool,
+    #[serde(default = "default_true")]
+    pub discord_rpc: bool,
 }
 
 fn default_true() -> bool {
@@ -38,6 +40,7 @@ impl Default for UserData {
             auto_sync: false,
             ad_shield: true,
             auto_update: true,
+            discord_rpc: true,
         }
     }
 }
@@ -123,6 +126,15 @@ impl UserManager {
     pub fn set_auto_update(&self, enabled: bool) -> UserData {
         let mut d = self.data.lock().unwrap();
         d.auto_update = enabled;
+        let snapshot = d.clone();
+        drop(d);
+        self.save(&snapshot);
+        snapshot
+    }
+
+    pub fn set_discord_rpc(&self, enabled: bool) -> UserData {
+        let mut d = self.data.lock().unwrap();
+        d.discord_rpc = enabled;
         let snapshot = d.clone();
         drop(d);
         self.save(&snapshot);
