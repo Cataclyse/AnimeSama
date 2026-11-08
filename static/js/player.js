@@ -96,6 +96,10 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
         playerState.duration = 0;
         playerState.paused = false;
         playerState.nextPromptActive = false;
+        playerState.skipData = null;
+
+        const animeTitle = State.currentAnime ? State.currentAnime.title : slug;
+        loadSkipTimes(animeTitle, episodeIndex + 1);
 
         const videoUrl = (State.currentEpisodes.players[State.selectedPlayer] || [])[episodeIndex];
 
@@ -395,21 +399,84 @@ function toggleSpeedMenu() {
     resetIdleTimer();
 }
 
+async function loadSkipTimes(title, episode) {
+    try {
+        playerState.skipData = null;
+        const res = await fetch(`/api/skips?title=${encodeURIComponent(title)}&ep=${episode}`);
+        if (res.ok) {
+            const data = await res.json();
+            if (data && data.found) {
+                playerState.skipData = data;
+            }
+        }
+    } catch (e) {
+        playerState.skipData = null;
+    }
+}
+
 function checkSkipIntro(currentTime) {
     const skipBtn = document.getElementById('netflixSkipIntroBtn');
     if (!skipBtn) return;
+
+    if (playerState.skipData && playerState.skipData.found) {
+        const op = playerState.skipData.op;
+        const ed = playerState.skipData.ed;
+
+        if (op && currentTime >= op.start - 0.5 && currentTime < op.end) {
+            skipBtn.style.display = 'flex';
+            skipBtn.dataset.skipTarget = op.end;
+            skipBtn.dataset.skipType = 'op';
+            const labelEl = skipBtn.querySelector('[data-i18n]');
+            if (labelEl) labelEl.textContent = "Passer l'intro";
+            const badgeEl = skipBtn.querySelector('.netflix-skip-intro-badge');
+            if (badgeEl) badgeEl.textContent = 'Auto';
+            return;
+        }
+
+        if (ed && currentTime >= ed.start - 0.5 && currentTime < ed.end) {
+            skipBtn.style.display = 'flex';
+            skipBtn.dataset.skipTarget = ed.end;
+            skipBtn.dataset.skipType = 'ed';
+            const labelEl = skipBtn.querySelector('[data-i18n]');
+            if (labelEl) labelEl.textContent = "Passer l'ending";
+            const badgeEl = skipBtn.querySelector('.netflix-skip-intro-badge');
+            if (badgeEl) badgeEl.textContent = 'Auto';
+            return;
+        }
+    }
+
     if (currentTime >= 5 && currentTime <= 210) {
         skipBtn.style.display = 'flex';
+        skipBtn.dataset.skipTarget = 'relative_85';
+        skipBtn.dataset.skipType = 'fallback';
+        const labelEl = skipBtn.querySelector('[data-i18n]');
+        if (labelEl) labelEl.textContent = "Passer l'intro";
+        const badgeEl = skipBtn.querySelector('.netflix-skip-intro-badge');
+        if (badgeEl) badgeEl.textContent = '+85s';
     } else {
         skipBtn.style.display = 'none';
     }
 }
 
 function skipIntro() {
-    seekRelative(85);
     const skipBtn = document.getElementById('netflixSkipIntroBtn');
+    const target = skipBtn ? skipBtn.dataset.skipTarget : null;
+
+    if (target && target !== 'relative_85') {
+        const num = parseFloat(target);
+        if (!isNaN(num) && num > 0) {
+            seekTo(num + 0.2);
+            showToast("Générique passé (précision API)");
+        } else {
+            seekRelative(85);
+            showToast("Intro passée (+85s)");
+        }
+    } else {
+        seekRelative(85);
+        showToast("Intro passée (+85s)");
+    }
+
     if (skipBtn) skipBtn.style.display = 'none';
-    showToast('Intro passée (+85s)');
     resetIdleTimer();
 }
 

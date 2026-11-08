@@ -1,3 +1,4 @@
+pub mod skips;
 pub mod trailer;
 
 use serde::{Deserialize, Serialize};

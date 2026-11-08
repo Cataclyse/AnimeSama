@@ -77,6 +77,23 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
             respond_json(req, &resp.to_string());
         }
 
+        ("GET", "/api/skips") => {
+            let title = query_params
+                .get("title")
+                .or_else(|| query_params.get("q"))
+                .cloned()
+                .unwrap_or_default();
+            let episode: u32 = query_params
+                .get("ep")
+                .or_else(|| query_params.get("episode"))
+                .and_then(|e| e.parse().ok())
+                .unwrap_or(1);
+
+            let skips = crate::catalogue::skips::get_skip_times(&title, episode);
+            let resp = serde_json::to_string(&skips).unwrap_or_else(|_| "{}".to_string());
+            respond_json(req, &resp);
+        }
+
         ("GET", "/api/search") => {
             let q = query_params.get("q").cloned().unwrap_or_default();
 
