@@ -418,10 +418,11 @@ function seekTo(targetTime) {
 function showSeekRipple(side) {
     const ripple = document.getElementById(side === 'right' ? 'netflixRippleRight' : 'netflixRippleLeft');
     if (!ripple) return;
+    if (ripple._hideTimeout) clearTimeout(ripple._hideTimeout);
     ripple.classList.remove('show');
     void ripple.offsetWidth;
     ripple.classList.add('show');
-    setTimeout(() => {
+    ripple._hideTimeout = setTimeout(() => {
         ripple.classList.remove('show');
     }, 450);
 }

@@ -528,34 +528,76 @@
 .netflix-ripple {
     position: absolute;
     top: 50%;
-    transform: translateY(-50%);
+    transform: translateY(-50%) scale(0.75);
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
-    color: #fff;
-    font-weight: 800;
-    font-size: 16px;
-    background: rgba(0, 0, 0, 0.6);
-    padding: 24px;
+    justify-content: center;
+    width: 84px;
+    height: 84px;
+    min-width: 84px;
+    min-height: 84px;
+    box-sizing: border-box;
     border-radius: 50%;
+    background: rgba(18, 18, 18, 0.85);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1.5px solid rgba(255, 255, 255, 0.22);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65), 0 0 20px rgba(229, 9, 20, 0.15);
+    color: #ffffff;
     opacity: 0;
     pointer-events: none;
-    z-index: 5;
-    transition: opacity 0.3s, transform 0.3s;
+    z-index: 10;
+    transition: opacity 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .netflix-ripple-left {
-    left: 15%;
+    left: 14%;
 }
 
 .netflix-ripple-right {
-    right: 15%;
+    right: 14%;
+}
+
+.netflix-ripple-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+}
+
+.netflix-ripple-icon svg {
+    width: 26px;
+    height: 26px;
+    fill: #ffffff;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
+}
+
+.netflix-ripple-label {
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.6px;
+    line-height: 1;
+    color: #ffffff;
+    margin-top: 2px;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    font-variant-numeric: tabular-nums;
 }
 
 .netflix-ripple.show {
     opacity: 1;
-    transform: translateY(-50%) scale(1.2);
+    transform: translateY(-50%) scale(1.05);
+}
+
+.netflix-ripple.show .netflix-ripple-icon {
+    animation: netflixRippleChevron 0.35s ease-out;
+}
+
+@keyframes netflixRippleChevron {
+    0% { transform: scale(0.85); }
+    50% { transform: scale(1.15); }
+    100% { transform: scale(1); }
 }
 
 .netflix-skip-intro-btn {

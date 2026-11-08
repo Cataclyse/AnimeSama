@@ -294,12 +294,16 @@
                 <div class="netflix-spinner-ring"></div>
             </div>
             <div class="netflix-ripple netflix-ripple-left" id="netflixRippleLeft">
-                <svg viewBox="0 0 24 24" width="48" height="48" fill="white"><path d="M12.5 3a9.5 9.5 0 0 0-8.8 6H1l3.5 4.5L8 9H5.5A7.5 7.5 0 1 1 5 13.5H3a9.5 9.5 0 1 0 9.5-10.5z"/><text x="12" y="16.5" font-size="7" font-weight="bold" fill="white" text-anchor="middle">10</text></svg>
-                <span>-10s</span>
+                <div class="netflix-ripple-icon">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z"/></svg>
+                </div>
+                <span class="netflix-ripple-label">-10s</span>
             </div>
             <div class="netflix-ripple netflix-ripple-right" id="netflixRippleRight">
-                <svg viewBox="0 0 24 24" width="48" height="48" fill="white"><path d="M11.5 3a9.5 9.5 0 0 1 8.8 6H23l-3.5 4.5L16 9h2.5A7.5 7.5 0 1 0 19 13.5h2a9.5 9.5 0 1 1-9.5-10.5z"/><text x="12" y="16.5" font-size="7" font-weight="bold" fill="white" text-anchor="middle">10</text></svg>
-                <span>+10s</span>
+                <div class="netflix-ripple-icon">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></svg>
+                </div>
+                <span class="netflix-ripple-label">+10s</span>
             </div>
 
             <button class="netflix-skip-intro-btn" id="netflixSkipIntroBtn" style="display: none;" onclick="skipIntro()">
