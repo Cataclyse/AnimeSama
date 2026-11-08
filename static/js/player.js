@@ -21,18 +21,36 @@ let playerState = {
 let lastDiscordRpcSend = 0;
 let lastDiscordRpcStatus = null;
 let lastDiscordRpcEpisode = null;
+let lastDiscordRpcCurrentTime = 0;
+let lastDiscordRpcTimeRecordedAt = 0;
 
 function syncDiscordRpc(force = false) {
-    const now = Date.now();
     const isPaused = !!playerState.paused;
     const currentStatus = isPaused ? 'paused' : 'playing';
     const epNum = State.currentEpIndex !== undefined ? (State.currentEpIndex + 1) : 1;
-    if (!force && lastDiscordRpcStatus === currentStatus && lastDiscordRpcEpisode === epNum) {
+    const curTime = playerState.currentTime || 0;
+    const now = Date.now();
+
+    if (!force) {
+        if (lastDiscordRpcStatus !== currentStatus || lastDiscordRpcEpisode !== epNum) {
+            force = true;
+        } else if (currentStatus === 'playing') {
+            const expectedTime = lastDiscordRpcCurrentTime + (now - lastDiscordRpcTimeRecordedAt) / 1000;
+            if (Math.abs(curTime - expectedTime) > 3) {
+                force = true;
+            }
+        }
+    }
+
+    if (!force) {
         return;
     }
+
     lastDiscordRpcSend = now;
     lastDiscordRpcStatus = currentStatus;
     lastDiscordRpcEpisode = epNum;
+    lastDiscordRpcCurrentTime = curTime;
+    lastDiscordRpcTimeRecordedAt = now;
 
     const animeTitle = State.currentAnime ? State.currentAnime.title : (State.currentEpisodes ? State.currentEpisodes.slug : '');
     const season = State.currentEpisodes ? State.currentEpisodes.season : null;
@@ -46,7 +64,7 @@ function syncDiscordRpc(force = false) {
             season: season,
             status: currentStatus,
             duration: Math.floor(playerState.duration || 0),
-            current_time: Math.floor(playerState.currentTime || 0)
+            current_time: Math.floor(curTime)
         })
     }).catch(() => {});
 }
@@ -448,6 +466,7 @@ function syncPlaybackState(currentTime, duration, bufferedEnd, paused, volume, m
     updateVolumeUI(playerState.volume, playerState.muted);
     checkSkipIntro(currentTime);
     checkNextEpisodePrompt(currentTime, playerState.duration);
+    syncDiscordRpc(false);
 }
 
 function renderScrubber(currentTime, duration, bufferedEnd) {
@@ -1236,6 +1255,8 @@ function changeEpisode(delta) {
 function closePlayerModal() {
     lastDiscordRpcStatus = null;
     lastDiscordRpcEpisode = null;
+    lastDiscordRpcCurrentTime = 0;
+    lastDiscordRpcTimeRecordedAt = 0;
     sendNavigationRpc('Page d\'accueil');
     stopDynamicFilter();
     flushCurrentPlayback();
