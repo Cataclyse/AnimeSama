@@ -30,8 +30,24 @@ iframe {{
     height: 0 !important;
 }}
 
-.jw-display-icon-container, .jw-display-icon-display, .jw-icon-display, .jw-svg-icon,
-.jw-controlbar, .jw-controls, .jw-media, .jw-preview, video {{
+.jw-controlbar, .jw-controls, .jw-controls-backdrop, .jw-display-icon-container,
+.jw-display-icon-display, .jw-icon-display, .jw-svg-icon, .jw-preview,
+.vjs-control-bar, .vjs-big-play-button, .vjs-loading-spinner, .vjs-poster,
+.plyr__controls, .clappr-controls, .fp-ui, .control-bar, .mejs__controls,
+#controls, .controls, [class*="controlbar" i], [class*="player-controls" i],
+.vjs-text-track-display, .jw-title {{
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}}
+
+video, .jw-media, .jw-video {{
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+    background: #000 !important;
     opacity: 1 !important;
     visibility: visible !important;
     pointer-events: auto !important;
@@ -682,14 +698,25 @@ div[class*="cf-turnstile" i] {{
         if (resumeTarget > 2 && !v._asSeekCompleted && v.currentTime < resumeTarget - 2) {{
             return;
         }}
-        if (!force && now - lastReported < 400) return;
+        if (!force && now - lastReported < 250) return;
         lastReported = now;
+        var bEnd = 0;
+        try {{
+            if (v.buffered && v.buffered.length > 0) {{
+                bEnd = v.buffered.end(v.buffered.length - 1);
+            }}
+        }} catch(e) {{}}
         try {{
             window.parent.postMessage({{
                 type: 'AS_PLAYBACK_PROGRESS',
                 ep: asEpNum,
                 currentTime: v.currentTime,
-                duration: v.duration || 0
+                duration: v.duration || 0,
+                paused: v.paused,
+                volume: v.volume,
+                muted: v.muted,
+                playbackRate: v.playbackRate,
+                bufferedEnd: bEnd
             }}, '*');
         }} catch(e) {{}}
     }}
@@ -714,6 +741,30 @@ div[class*="cf-turnstile" i] {{
 
         ['loadedmetadata', 'loadeddata', 'canplay', 'canplaythrough', 'play', 'playing'].forEach(function(evt) {{
             v.addEventListener(evt, attemptSeek);
+        }});
+
+        ['play', 'playing'].forEach(function(evt) {{
+            v.addEventListener(evt, function() {{
+                try {{ window.parent.postMessage({{ type: 'AS_PLAY_STATE', paused: false }}, '*'); }} catch(e){{}}
+            }});
+        }});
+        ['pause'].forEach(function(evt) {{
+            v.addEventListener(evt, function() {{
+                try {{ window.parent.postMessage({{ type: 'AS_PLAY_STATE', paused: true }}, '*'); }} catch(e){{}}
+            }});
+        }});
+        ['waiting'].forEach(function(evt) {{
+            v.addEventListener(evt, function() {{
+                try {{ window.parent.postMessage({{ type: 'AS_WAITING', waiting: true }}, '*'); }} catch(e){{}}
+            }});
+        }});
+        ['canplay', 'canplaythrough', 'playing'].forEach(function(evt) {{
+            v.addEventListener(evt, function() {{
+                try {{ window.parent.postMessage({{ type: 'AS_WAITING', waiting: false }}, '*'); }} catch(e){{}}
+            }});
+        }});
+        v.addEventListener('ended', function() {{
+            try {{ window.parent.postMessage({{ type: 'AS_ENDED' }}, '*'); }} catch(e){{}}
         }});
 
         v.addEventListener('seeked', function() {{
@@ -793,19 +844,36 @@ div[class*="cf-turnstile" i] {{
 
     window.addEventListener('message', function(ev) {{
         if (!ev.data) return;
+        var v = document.querySelector('video');
         if (ev.data.type === 'AS_SEEK_TO') {{
             var target = parseFloat(ev.data.time);
-            var v = document.querySelector('video');
             if (v && !isNaN(target)) {{
                 try {{ v.currentTime = target; }} catch(err) {{}}
             }}
         }} else if (ev.data.type === 'AS_TOGGLE_PLAY') {{
             togglePlay();
+        }} else if (ev.data.type === 'AS_PLAY') {{
+            if (v) {{ try {{ v.play().catch(function(){{}}); }} catch(err) {{}} }}
+        }} else if (ev.data.type === 'AS_PAUSE') {{
+            if (v) {{ try {{ v.pause(); }} catch(err) {{}} }}
         }} else if (ev.data.type === 'AS_SEEK_RELATIVE') {{
             var delta = parseFloat(ev.data.delta) || 0;
-            var v2 = document.querySelector('video');
-            if (v2 && !isNaN(v2.currentTime)) {{
-                try {{ v2.currentTime = Math.max(0, Math.min(v2.duration || Infinity, v2.currentTime + delta)); }} catch(err) {{}}
+            if (v && !isNaN(v.currentTime)) {{
+                try {{ v.currentTime = Math.max(0, Math.min(v.duration || Infinity, v.currentTime + delta)); }} catch(err) {{}}
+            }}
+        }} else if (ev.data.type === 'AS_SET_VOLUME') {{
+            var vol = parseFloat(ev.data.volume);
+            if (v && !isNaN(vol)) {{
+                try {{ v.volume = Math.max(0, Math.min(1, vol)); }} catch(err) {{}}
+            }}
+        }} else if (ev.data.type === 'AS_SET_MUTED') {{
+            if (v) {{
+                try {{ v.muted = !!ev.data.muted; }} catch(err) {{}}
+            }}
+        }} else if (ev.data.type === 'AS_SET_PLAYBACK_RATE') {{
+            var rate = parseFloat(ev.data.rate);
+            if (v && !isNaN(rate)) {{
+                try {{ v.playbackRate = rate; }} catch(err) {{}}
             }}
         }}
     }});
@@ -850,14 +918,25 @@ pub fn generate_resume_only_script(resume_seconds: f64, episode_num: u32) -> Str
         if (resumeTarget > 2 && !v._asSeekCompleted && v.currentTime < resumeTarget - 2) {{
             return;
         }}
-        if (!force && now - lastReported < 400) return;
+        if (!force && now - lastReported < 250) return;
         lastReported = now;
+        var bEnd = 0;
+        try {{
+            if (v.buffered && v.buffered.length > 0) {{
+                bEnd = v.buffered.end(v.buffered.length - 1);
+            }}
+        }} catch(e) {{}}
         try {{
             window.parent.postMessage({{
                 type: 'AS_PLAYBACK_PROGRESS',
                 ep: asEpNum,
                 currentTime: v.currentTime,
-                duration: v.duration || 0
+                duration: v.duration || 0,
+                paused: v.paused,
+                volume: v.volume,
+                muted: v.muted,
+                playbackRate: v.playbackRate,
+                bufferedEnd: bEnd
             }}, '*');
         }} catch(e) {{}}
     }}
@@ -881,6 +960,30 @@ pub fn generate_resume_only_script(resume_seconds: f64, episode_num: u32) -> Str
 
         ['loadedmetadata', 'loadeddata', 'canplay', 'canplaythrough', 'play', 'playing'].forEach(function(evt) {{
             v.addEventListener(evt, attemptSeek);
+        }});
+
+        ['play', 'playing'].forEach(function(evt) {{
+            v.addEventListener(evt, function() {{
+                try {{ window.parent.postMessage({{ type: 'AS_PLAY_STATE', paused: false }}, '*'); }} catch(e){{}}
+            }});
+        }});
+        ['pause'].forEach(function(evt) {{
+            v.addEventListener(evt, function() {{
+                try {{ window.parent.postMessage({{ type: 'AS_PLAY_STATE', paused: true }}, '*'); }} catch(e){{}}
+            }});
+        }});
+        ['waiting'].forEach(function(evt) {{
+            v.addEventListener(evt, function() {{
+                try {{ window.parent.postMessage({{ type: 'AS_WAITING', waiting: true }}, '*'); }} catch(e){{}}
+            }});
+        }});
+        ['canplay', 'canplaythrough', 'playing'].forEach(function(evt) {{
+            v.addEventListener(evt, function() {{
+                try {{ window.parent.postMessage({{ type: 'AS_WAITING', waiting: false }}, '*'); }} catch(e){{}}
+            }});
+        }});
+        v.addEventListener('ended', function() {{
+            try {{ window.parent.postMessage({{ type: 'AS_ENDED' }}, '*'); }} catch(e){{}}
         }});
 
         v.addEventListener('seeked', function() {{
@@ -959,19 +1062,36 @@ pub fn generate_resume_only_script(resume_seconds: f64, episode_num: u32) -> Str
 
     window.addEventListener('message', function(ev) {{
         if (!ev.data) return;
+        var v = document.querySelector('video');
         if (ev.data.type === 'AS_SEEK_TO') {{
             var target = parseFloat(ev.data.time);
-            var v = document.querySelector('video');
             if (v && !isNaN(target)) {{
                 try {{ v.currentTime = target; }} catch(err) {{}}
             }}
         }} else if (ev.data.type === 'AS_TOGGLE_PLAY') {{
             togglePlay();
+        }} else if (ev.data.type === 'AS_PLAY') {{
+            if (v) {{ try {{ v.play().catch(function(){{}}); }} catch(err) {{}} }}
+        }} else if (ev.data.type === 'AS_PAUSE') {{
+            if (v) {{ try {{ v.pause(); }} catch(err) {{}} }}
         }} else if (ev.data.type === 'AS_SEEK_RELATIVE') {{
             var delta = parseFloat(ev.data.delta) || 0;
-            var v2 = document.querySelector('video');
-            if (v2 && !isNaN(v2.currentTime)) {{
-                try {{ v2.currentTime = Math.max(0, Math.min(v2.duration || Infinity, v2.currentTime + delta)); }} catch(err) {{}}
+            if (v && !isNaN(v.currentTime)) {{
+                try {{ v.currentTime = Math.max(0, Math.min(v.duration || Infinity, v.currentTime + delta)); }} catch(err) {{}}
+            }}
+        }} else if (ev.data.type === 'AS_SET_VOLUME') {{
+            var vol = parseFloat(ev.data.volume);
+            if (v && !isNaN(vol)) {{
+                try {{ v.volume = Math.max(0, Math.min(1, vol)); }} catch(err) {{}}
+            }}
+        }} else if (ev.data.type === 'AS_SET_MUTED') {{
+            if (v) {{
+                try {{ v.muted = !!ev.data.muted; }} catch(err) {{}}
+            }}
+        }} else if (ev.data.type === 'AS_SET_PLAYBACK_RATE') {{
+            var rate = parseFloat(ev.data.rate);
+            if (v && !isNaN(rate)) {{
+                try {{ v.playbackRate = rate; }} catch(err) {{}}
             }}
         }}
     }});
