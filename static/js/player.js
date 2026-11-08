@@ -533,6 +533,7 @@ function seekRelative(delta) {
     renderScrubber(newTime, playerState.duration, playerState.bufferedEnd);
     renderTimeDisplay(newTime, playerState.duration);
     showSeekRipple(delta > 0 ? 'right' : 'left');
+    syncDiscordRpc(true);
     resetIdleTimer();
 }
 
@@ -547,6 +548,7 @@ function seekTo(targetTime) {
     playerState.currentTime = t;
     renderScrubber(t, playerState.duration, playerState.bufferedEnd);
     renderTimeDisplay(t, playerState.duration);
+    syncDiscordRpc(true);
 }
 
 function showSeekRipple(side) {

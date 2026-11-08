@@ -59,7 +59,7 @@ pub fn init_discord_rpc() {
                         if let Some(ep) = payload.episode {
                             state_parts.push(format!("Épisode {}", ep));
                         }
-                        let state_str = if state_parts.is_empty() {
+                        let mut state_str = if state_parts.is_empty() {
                             if payload.status == "playing" {
                                 "En cours de lecture".to_string()
                             } else {
@@ -68,6 +68,16 @@ pub fn init_discord_rpc() {
                         } else {
                             state_parts.join(" • ")
                         };
+
+                        if let (Some(cur), Some(dur)) = (payload.current_time, payload.duration) {
+                            if dur > 0 {
+                                if payload.status == "paused" {
+                                    state_str.push_str(&format!(" [{} / {} - En pause]", format_time(cur), format_time(dur)));
+                                } else {
+                                    state_str.push_str(&format!(" [{} / {}]", format_time(cur), format_time(dur)));
+                                }
+                            }
+                        }
                         act = act.state(&state_str);
 
                         let mut assets = activity::Assets::new()
@@ -88,8 +98,13 @@ pub fn init_discord_rpc() {
                                         .duration_since(std::time::UNIX_EPOCH)
                                         .unwrap_or_default()
                                         .as_secs();
-                                    let end_ts = now_secs + (dur - cur);
-                                    act = act.timestamps(activity::Timestamps::new().end(end_ts as i64));
+                                    let start_ts = now_secs.saturating_sub(cur);
+                                    let end_ts = start_ts + dur;
+                                    act = act.timestamps(
+                                        activity::Timestamps::new()
+                                            .start(start_ts as i64)
+                                            .end(end_ts as i64),
+                                    );
                                 }
                             }
                         }
@@ -134,5 +149,17 @@ pub fn clear_presence() {
     let sender_guard = RPC_SENDER.lock().unwrap();
     if let Some(tx) = sender_guard.as_ref() {
         let _ = tx.send(RpcCommand::Clear);
+    }
+}
+
+fn format_time(seconds: u64) -> String {
+    let m = seconds / 60;
+    let s = seconds % 60;
+    let h = m / 60;
+    let rem_m = m % 60;
+    if h > 0 {
+        format!("{}:{:02}:{:02}", h, rem_m, s)
+    } else {
+        format!("{:02}:{:02}", rem_m, s)
     }
 }
