@@ -49,6 +49,29 @@ function sendFrameMessage(msg) {
     } catch (e) {}
 }
 
+const PREFERRED_PLAYERS = ['Uqload', 'VOE', 'VidMoly', 'Sibnet', 'Sendvid', 'Earnvids', 'DoodStream', 'StreamTape', 'OneUpload', 'FileMoon'];
+
+function pickBestPlayer(players, current) {
+    if (!players || !players.length) return null;
+    if (current && players.includes(current)) return current;
+    for (const pref of PREFERRED_PLAYERS) {
+        const found = players.find(p => p.toLowerCase().includes(pref.toLowerCase()));
+        if (found) return found;
+    }
+    return players[0];
+}
+
+function updateAppTitle(isPlaying) {
+    if (isPlaying && State.currentAnime) {
+        const title = State.currentAnime.title || State.currentAnime.slug;
+        const ep = (State.currentEpIndex !== undefined) ? (State.currentEpIndex + 1) : 1;
+        const lang = (State.selectedLanguage || 'vostfr').toUpperCase();
+        document.title = `Anime-Sama — ${title} — Ep ${ep} (${lang})`;
+    } else {
+        document.title = 'Anime-Sama';
+    }
+}
+
 async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) {
     try {
         if (!State.currentAnime || State.currentAnime.slug !== slug) {

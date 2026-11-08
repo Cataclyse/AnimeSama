@@ -72,3 +72,82 @@ async function recordHistory(slug, epNumber) {
         }
     } catch (e) {}
 }
+
+function updateAppTitle(isPlaying) {
+    if (isPlaying && State.currentAnime) {
+        const title = State.currentAnime.title || State.currentAnime.slug;
+        const ep = (State.currentEpIndex !== undefined) ? (State.currentEpIndex + 1) : 1;
+        const lang = (State.selectedLanguage || 'vostfr').toUpperCase();
+        document.title = `Anime-Sama — ${title} — Ep ${ep} (${lang})`;
+    } else {
+        document.title = 'Anime-Sama';
+    }
+}
+
+function savePlaybackProgress(progress) {
+    try {
+        const key = 'as_progress_' + progress.slug;
+        localStorage.setItem(key, JSON.stringify(progress));
+
+        const seasonBase = (progress.season || 'saison1').split('/')[0].toLowerCase();
+        const epData = {
+            currentTime: progress.currentTime,
+            duration: progress.duration,
+            season: progress.season,
+            episode: progress.episode,
+            timestamp: progress.timestamp || Date.now()
+        };
+        localStorage.setItem(`as_ep_progress_${progress.slug}_${seasonBase}_${progress.episode}`, JSON.stringify(epData));
+        localStorage.setItem(`as_ep_progress_${progress.slug}_${progress.episode}`, JSON.stringify(epData));
+    } catch(e) {}
+}
+
+function getPlaybackProgress(slug) {
+    try {
+        const val = localStorage.getItem('as_progress_' + slug);
+        return val ? JSON.parse(val) : null;
+    } catch(e) {
+        return null;
+    }
+}
+
+function getEpisodeProgress(slug, epNum, season) {
+    try {
+        if (season) {
+            const seasonBase = season.split('/')[0].toLowerCase();
+            const val = localStorage.getItem(`as_ep_progress_${slug}_${seasonBase}_${epNum}`);
+            if (val) return JSON.parse(val);
+        }
+        const general = localStorage.getItem(`as_ep_progress_${slug}_${epNum}`);
+        if (general) {
+            const parsed = JSON.parse(general);
+            if (!season || !parsed.season || parsed.season.split('/')[0].toLowerCase() === season.split('/')[0].toLowerCase()) {
+                return parsed;
+            }
+        }
+        const animeProg = getPlaybackProgress(slug);
+        if (animeProg && animeProg.episode === epNum) {
+            if (!season || !animeProg.season || animeProg.season.split('/')[0].toLowerCase() === season.split('/')[0].toLowerCase()) {
+                return animeProg;
+            }
+        }
+        return null;
+    } catch(e) {
+        return null;
+    }
+}
+
+function recordEpisodeProgress(slug, epNum, currentTime, duration) {
+    if (!slug || !epNum) return;
+    const season = (State.currentEpisodes && State.currentEpisodes.season)
+        ? State.currentEpisodes.season
+        : 'saison1/vostfr';
+    savePlaybackProgress({
+        slug: slug,
+        season: season,
+        episode: parseInt(epNum, 10),
+        currentTime: parseFloat(currentTime) || 0,
+        duration: parseFloat(duration) || 0,
+        timestamp: Date.now()
+    });
+}

@@ -135,8 +135,11 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
             if (v._asSeekCompleted || resumeTarget <= 2) return;
             try {{
                 withHoster(function(p) {{
-                    if (typeof p.seek === 'function') p.seek(resumeTarget);
-                    else if (typeof p.currentTime !== 'undefined') p.currentTime = resumeTarget;
+                    try {{
+                        if (typeof p.seek === 'function') p.seek(resumeTarget);
+                        else if (typeof p.currentTime === 'function') p.currentTime(resumeTarget);
+                        else if (typeof p.currentTime !== 'undefined') p.currentTime = resumeTarget;
+                    }} catch(e) {{}}
                 }});
                 if (v.readyState >= 1 || (v.duration && v.duration > 2) || v.currentTime > 0) {{
                     v.currentTime = resumeTarget;
@@ -185,9 +188,22 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
     var videoPoll = setInterval(function() {{
         var list = document.querySelectorAll('video');
         if (list.length > 0) {{
-            for (var i = 0; i < list.length; i++) hookVideo(list[i]);
+            for (var i = 0; i < list.length; i++) {{
+                hookVideo(list[i]);
+                if (resumeTarget > 2 && !list[i]._asSeekCompleted) {{
+                    try {{
+                        withHoster(function(p) {{
+                            if (typeof p.seek === 'function') p.seek(resumeTarget);
+                            else if (typeof p.currentTime === 'function') p.currentTime(resumeTarget);
+                        }});
+                        if (list[i].readyState >= 1 || list[i].currentTime > 0) {{
+                            list[i].currentTime = resumeTarget;
+                        }}
+                    }} catch(e) {{}}
+                }}
+            }}
         }}
-    }}, 300);
+    }}, 250);
     setTimeout(function() {{ clearInterval(videoPoll); }}, 15000);
 
     var autoPlayTries = 0;
@@ -244,8 +260,11 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
                 resumeTarget = target;
                 if (v) v._asSeekCompleted = (target <= 2);
                 withHoster(function(p) {{
-                    if (typeof p.seek === 'function') p.seek(target);
-                    else if (typeof p.currentTime !== 'undefined') p.currentTime = target;
+                    try {{
+                        if (typeof p.seek === 'function') p.seek(target);
+                        else if (typeof p.currentTime === 'function') p.currentTime(target);
+                        else if (typeof p.currentTime !== 'undefined') p.currentTime = target;
+                    }} catch(e) {{}}
                 }});
                 if (v) try {{ v.currentTime = target; }} catch(e) {{}}
             }}
