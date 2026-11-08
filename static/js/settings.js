@@ -223,7 +223,12 @@ async function checkForUpdates(silent = false) {
 
         if (data.update_available) {
             if (desc) {
-                desc.textContent = `🎉 ${t('settings.update_available', 'Nouvelle version')} ${data.latest_version} ${t('settings.available', 'disponible !')}`;
+                const kindLabel = data.install_kind === 'windows_installer' ? ' (Installateur)'
+                    : data.install_kind === 'windows_standalone' ? ' (Portable)'
+                    : data.install_kind === 'linux_deb' ? ' (Paquet .deb)'
+                    : data.install_kind === 'linux_gui_standalone' ? ' (Portable Linux)'
+                    : '';
+                desc.textContent = `🎉 ${t('settings.update_available', 'Nouvelle version')} ${data.latest_version}${kindLabel} ${t('settings.available', 'disponible !')}`;
                 desc.style.color = '#46d369';
             }
             if (applyBtn) {

@@ -4,6 +4,66 @@ use std::io::Read;
 
 pub const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InstallKind {
+    WindowsInstaller,
+    WindowsStandalone,
+    LinuxDeb,
+    LinuxGuiStandalone,
+    LinuxServerStandalone,
+}
+
+impl InstallKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            InstallKind::WindowsInstaller => "windows_installer",
+            InstallKind::WindowsStandalone => "windows_standalone",
+            InstallKind::LinuxDeb => "linux_deb",
+            InstallKind::LinuxGuiStandalone => "linux_gui_standalone",
+            InstallKind::LinuxServerStandalone => "linux_server_standalone",
+        }
+    }
+}
+
+pub fn detect_install_kind() -> InstallKind {
+    let is_windows = cfg!(target_os = "windows");
+    let is_linux = cfg!(target_os = "linux");
+
+    let current_exe = std::env::current_exe().ok();
+
+    if is_windows {
+        if let Some(exe) = &current_exe {
+            if let Some(parent) = exe.parent() {
+                if parent.join("unins000.exe").exists() || parent.join("unins001.exe").exists() {
+                    return InstallKind::WindowsInstaller;
+                }
+            }
+            let p_lower = exe.to_string_lossy().to_lowercase();
+            if p_lower.contains("program files") || p_lower.contains("programs\\anime-sama") || p_lower.contains("programs/anime-sama") {
+                return InstallKind::WindowsInstaller;
+            }
+        }
+        InstallKind::WindowsStandalone
+    } else if is_linux {
+        if !cfg!(feature = "gui") {
+            return InstallKind::LinuxServerStandalone;
+        }
+        if let Some(exe) = &current_exe {
+            let p = exe.to_string_lossy();
+            if p.starts_with("/usr/bin") || p.starts_with("/usr/local/bin") || p.starts_with("/opt") {
+                return InstallKind::LinuxDeb;
+            }
+            let file_name = exe.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if file_name.contains("server") {
+                return InstallKind::LinuxServerStandalone;
+            }
+        }
+        InstallKind::LinuxGuiStandalone
+    } else {
+        InstallKind::WindowsStandalone
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateInfo {
     pub current_version: String,
@@ -14,6 +74,7 @@ pub struct UpdateInfo {
     pub release_url: String,
     pub download_url: Option<String>,
     pub asset_name: Option<String>,
+    pub install_kind: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,10 +104,7 @@ pub fn is_newer_version(current: &str, latest: &str) -> bool {
     }
 }
 
-pub fn select_asset<'a>(assets: &'a [serde_json::Value]) -> Option<(&'a str, &'a str)> {
-    let is_windows = cfg!(target_os = "windows");
-    let is_linux = cfg!(target_os = "linux");
-
+pub fn select_asset_for_kind<'a>(assets: &'a [serde_json::Value], kind: InstallKind) -> Option<(&'a str, &'a str)> {
     let mut candidate = None;
 
     for asset in assets {
@@ -59,35 +117,58 @@ pub fn select_asset<'a>(assets: &'a [serde_json::Value]) -> Option<(&'a str, &'a
             None => continue,
         };
 
-        if is_windows {
-            if name.ends_with(".exe") && name.to_lowercase().contains("setup") {
-                return Some((name, download_url));
-            }
-            if name == "animesama.exe" || name == "animesama-windows-x86_64.exe" {
-                if candidate.is_none() {
+        match kind {
+            InstallKind::WindowsInstaller => {
+                if name.ends_with(".exe") && name.to_lowercase().contains("setup") {
+                    return Some((name, download_url));
+                }
+                if (name == "animesama.exe" || name == "animesama-windows-x86_64.exe") && candidate.is_none() {
                     candidate = Some((name, download_url));
                 }
             }
-            if name.ends_with(".zip") && name.contains("windows") && candidate.is_none() {
-                candidate = Some((name, download_url));
+            InstallKind::WindowsStandalone => {
+                if name == "animesama-windows-x86_64.exe" || name == "animesama.exe" {
+                    return Some((name, download_url));
+                }
+                if name.ends_with(".zip") && name.contains("windows") && candidate.is_none() {
+                    candidate = Some((name, download_url));
+                }
+                if name.ends_with(".exe") && candidate.is_none() {
+                    candidate = Some((name, download_url));
+                }
             }
-        } else if is_linux {
-            if name.ends_with(".deb") {
-                return Some((name, download_url));
+            InstallKind::LinuxDeb => {
+                if name.ends_with(".deb") {
+                    return Some((name, download_url));
+                }
+                if (name == "animesama-linux-gui-x86_64" || name == "animesama-linux-gui") && candidate.is_none() {
+                    candidate = Some((name, download_url));
+                }
             }
-            if name == "animesama-linux-gui" || name == "animesama-linux-gui-x86_64" {
-                return Some((name, download_url));
+            InstallKind::LinuxGuiStandalone => {
+                if name == "animesama-linux-gui-x86_64" || name == "animesama-linux-gui" {
+                    return Some((name, download_url));
+                }
+                if name.ends_with(".tar.gz") && candidate.is_none() {
+                    candidate = Some((name, download_url));
+                }
             }
-            if (name == "animesama-linux-server" || name == "animesama-linux-server-x86_64") && candidate.is_none() {
-                candidate = Some((name, download_url));
-            }
-            if name.ends_with(".tar.gz") && candidate.is_none() {
-                candidate = Some((name, download_url));
+            InstallKind::LinuxServerStandalone => {
+                if name == "animesama-linux-server-x86_64" || name == "animesama-linux-server" {
+                    return Some((name, download_url));
+                }
+                if name.ends_with(".tar.gz") && candidate.is_none() {
+                    candidate = Some((name, download_url));
+                }
             }
         }
     }
 
     candidate
+}
+
+pub fn select_asset<'a>(assets: &'a [serde_json::Value]) -> Option<(&'a str, &'a str)> {
+    select_asset_for_kind(assets, detect_install_kind())
 }
 
 fn update_agent() -> ureq::Agent {
@@ -128,6 +209,8 @@ pub fn check_for_updates() -> Result<UpdateInfo, String> {
         }
     }
 
+    let kind = detect_install_kind();
+
     let body = match body {
         Some(b) => b,
         None => {
@@ -140,6 +223,7 @@ pub fn check_for_updates() -> Result<UpdateInfo, String> {
                 release_url: "https://github.com/Cataclyse/AnimeSama/releases".to_string(),
                 download_url: None,
                 asset_name: None,
+                install_kind: kind.as_str().to_string(),
             });
         }
     };
@@ -174,7 +258,7 @@ pub fn check_for_updates() -> Result<UpdateInfo, String> {
         .map(|a| a.as_slice())
         .unwrap_or(&[]);
 
-    let selected = select_asset(assets);
+    let selected = select_asset_for_kind(assets, kind);
     let (asset_name, download_url) = match selected {
         Some((name, url)) => (Some(name.to_string()), Some(url.to_string())),
         None => (None, None),
@@ -191,6 +275,7 @@ pub fn check_for_updates() -> Result<UpdateInfo, String> {
         release_url,
         download_url,
         asset_name,
+        install_kind: kind.as_str().to_string(),
     })
 }
 
@@ -335,11 +420,30 @@ mod tests {
     #[test]
     fn test_asset_selection_windows_and_linux() {
         let assets = serde_json::json!([
-            { "name": "animesama.exe", "browser_download_url": "https://example.com/animesama.exe" },
+            { "name": "AnimeSama-Setup-x86_64.exe", "browser_download_url": "https://example.com/setup.exe" },
+            { "name": "animesama-windows-x86_64.exe", "browser_download_url": "https://example.com/standalone.exe" },
             { "name": "animesama_0.1.0_amd64.deb", "browser_download_url": "https://example.com/deb" },
-            { "name": "animesama-linux-gui", "browser_download_url": "https://example.com/gui" }
+            { "name": "animesama-linux-gui-x86_64", "browser_download_url": "https://example.com/gui" },
+            { "name": "animesama-linux-server-x86_64", "browser_download_url": "https://example.com/server" }
         ]);
-        let selected = select_asset(assets.as_array().unwrap());
+        let arr = assets.as_array().unwrap();
+
+        let win_inst = select_asset_for_kind(arr, InstallKind::WindowsInstaller).unwrap();
+        assert_eq!(win_inst.0, "AnimeSama-Setup-x86_64.exe");
+
+        let win_stand = select_asset_for_kind(arr, InstallKind::WindowsStandalone).unwrap();
+        assert_eq!(win_stand.0, "animesama-windows-x86_64.exe");
+
+        let lin_deb = select_asset_for_kind(arr, InstallKind::LinuxDeb).unwrap();
+        assert_eq!(lin_deb.0, "animesama_0.1.0_amd64.deb");
+
+        let lin_gui = select_asset_for_kind(arr, InstallKind::LinuxGuiStandalone).unwrap();
+        assert_eq!(lin_gui.0, "animesama-linux-gui-x86_64");
+
+        let lin_srv = select_asset_for_kind(arr, InstallKind::LinuxServerStandalone).unwrap();
+        assert_eq!(lin_srv.0, "animesama-linux-server-x86_64");
+
+        let selected = select_asset(arr);
         assert!(selected.is_some());
     }
 }
