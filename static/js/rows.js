@@ -1,7 +1,6 @@
 function renderHomeRows() {
     DOM.contentRows.innerHTML = '';
 
-    
     if (State.homeData.slides && State.homeData.slides.length) {
         const trendingCards = State.homeData.slides.map(s => ({
             slug: s.slug,
@@ -15,6 +14,8 @@ function renderHomeRows() {
         }));
         appendRow(t('row.trending', 'À l\'affiche & Tendances'), trendingCards);
     }
+
+    renderContinueWatchingRow();
 
     const sections = State.homeData.sections || [];
     sections.forEach(sec => {
@@ -213,6 +214,13 @@ function createCardHTML(card) {
     const flags = (card.flags && card.flags.length) ? card.flags : ['VOSTFR'];
     const flagBadges = flags.map(f => `<span class="card-badge">${escapeHtml(f)}</span>`).join('');
 
+    const savedProg = (typeof getPlaybackProgress === 'function') ? getPlaybackProgress(card.slug) : null;
+    let cardProgPct = 0;
+    if (savedProg && savedProg.currentTime > 5) {
+        const dur = (savedProg.duration && savedProg.duration > 60) ? savedProg.duration : 1440;
+        cardProgPct = Math.min(100, Math.round((savedProg.currentTime / dur) * 100));
+    }
+
     return `
         <div class="anime-card" data-slug="${card.slug}" data-title="${escapeHtml(card.nom)}" onclick="openDetailModal('${card.slug}')" onmouseenter="handleCardMouseEnter(this)" onmouseleave="handleCardMouseLeave(this)">
             <button class="card-watchlist-btn ${inList ? 'in-list' : ''}" data-card-watchlist="${card.slug}" onclick="event.stopPropagation(); toggleWatchlist('${card.slug}');" title="${inList ? t('btn.remove_watchlist', 'Retirer de ma liste') : t('btn.add_watchlist', 'Ajouter à ma liste')}" aria-label="${t('nav.watchlist', 'Ma Liste')}">
@@ -223,6 +231,7 @@ function createCardHTML(card) {
             </button>
             <img class="card-poster" src="${poster}" alt="${escapeHtml(card.nom)}" loading="lazy" onerror="this.src='/api/img?slug=${card.slug}'">
             <div class="card-trailer-slot"></div>
+            ${cardProgPct > 0 ? `<div class="card-progress-bar"><div class="card-progress-fill" style="width: ${cardProgPct}%;"></div></div>` : ''}
             <div class="card-overlay">
                 <div class="card-title" title="${escapeHtml(card.nom)}">${escapeHtml(card.nom)}</div>
                 <div class="card-meta">
@@ -231,6 +240,139 @@ function createCardHTML(card) {
                     ${card.etat ? `<span class="card-badge">${escapeHtml(card.etat)}</span>` : ''}
                 </div>
                 ${card.info ? `<div class="card-info-text">${escapeHtml(card.info)}</div>` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function resumeAnimePlayback(slug, season, epIdx, curTime) {
+    if (typeof openEpisodePlayer === 'function') {
+        const safeIdx = Math.max(0, parseInt(epIdx, 10) || 0);
+        const resumeSec = (parseFloat(curTime) > 5) ? parseFloat(curTime) : null;
+        openEpisodePlayer(slug, season || 'saison1/vostfr', safeIdx, resumeSec);
+    }
+}
+
+function renderContinueWatchingRow() {
+    const history = (State.userData && State.userData.history) ? State.userData.history : [];
+    const continueMap = new Map();
+
+    for (const h of history) {
+        if (!h.slug) continue;
+        const savedProg = (typeof getPlaybackProgress === 'function') ? getPlaybackProgress(h.slug) : null;
+        const ep = (savedProg && savedProg.episode) ? savedProg.episode : (h.episode || 1);
+        const season = (savedProg && savedProg.season) ? savedProg.season : (h.season || 'saison1/vostfr');
+        const curTime = (savedProg && savedProg.currentTime) ? savedProg.currentTime : 0;
+        const dur = (savedProg && savedProg.duration && savedProg.duration > 60) ? savedProg.duration : 1440;
+        const pct = curTime > 5 ? Math.min(100, Math.round((curTime / dur) * 100)) : 30;
+        const timestamp = (savedProg && savedProg.timestamp) ? savedProg.timestamp : ((h.timestamp || 0) * 1000);
+
+        const seasonBase = (season || 'saison1').split('/')[0];
+        const seasonNum = seasonBase.replace(/[^0-9]/g, '') || '1';
+
+        continueMap.set(h.slug, {
+            slug: h.slug,
+            title: h.title || h.slug,
+            season: season,
+            seasonNum: seasonNum,
+            episode: ep,
+            currentTime: curTime,
+            duration: dur,
+            progressPercent: pct,
+            timestamp: timestamp
+        });
+    }
+
+    try {
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('as_progress_')) {
+                const slug = key.substring('as_progress_'.length);
+                if (slug && !continueMap.has(slug)) {
+                    try {
+                        const savedProg = JSON.parse(localStorage.getItem(key));
+                        if (savedProg && (savedProg.currentTime > 5 || savedProg.episode)) {
+                            const season = savedProg.season || 'saison1/vostfr';
+                            const seasonBase = season.split('/')[0];
+                            const seasonNum = seasonBase.replace(/[^0-9]/g, '') || '1';
+                            const dur = (savedProg.duration && savedProg.duration > 60) ? savedProg.duration : 1440;
+                            const curTime = savedProg.currentTime || 0;
+                            continueMap.set(slug, {
+                                slug: slug,
+                                title: savedProg.title || slug,
+                                season: season,
+                                seasonNum: seasonNum,
+                                episode: savedProg.episode || 1,
+                                currentTime: curTime,
+                                duration: dur,
+                                progressPercent: curTime > 5 ? Math.min(100, Math.round((curTime / dur) * 100)) : 30,
+                                timestamp: savedProg.timestamp || Date.now()
+                            });
+                        }
+                    } catch (_) {}
+                }
+            }
+        }
+    } catch (_) {}
+
+    const cards = Array.from(continueMap.values());
+    if (!cards.length) return;
+
+    cards.sort((a, b) => b.timestamp - a.timestamp);
+    const limited = cards.slice(0, 15);
+
+    const rowId = 'row_continue_' + Math.random().toString(36).substring(2, 9);
+    const rowEl = document.createElement('div');
+    rowEl.className = 'content-row continue-row';
+    rowEl.innerHTML = `
+        <div class="row-header">
+            <h2 class="row-title">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#e50914" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                ${t('row.continue_watching', 'Reprendre')}
+            </h2>
+        </div>
+        <div class="rail-container">
+            <button class="rail-nav-btn prev" onclick="scrollRail('${rowId}', -1)" aria-label="Défiler à gauche">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </button>
+            <div class="rail-slider continue-slider" id="${rowId}">
+                ${limited.map(c => createContinueCardHTML(c)).join('')}
+            </div>
+            <button class="rail-nav-btn next" onclick="scrollRail('${rowId}', 1)" aria-label="Défiler à droite">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </button>
+        </div>
+    `;
+
+    DOM.contentRows.appendChild(rowEl);
+}
+
+function createContinueCardHTML(c) {
+    const curMins = Math.floor(c.currentTime / 60);
+    return `
+        <div class="continue-card" data-slug="${c.slug}">
+            <div class="continue-thumb-wrap" onclick="resumeAnimePlayback('${escapeHtml(c.slug)}', '${escapeHtml(c.season)}', ${c.episode - 1}, ${c.currentTime})">
+                <img class="continue-poster" src="/api/img?slug=${encodeURIComponent(c.slug)}" alt="${escapeHtml(c.title)}" loading="lazy" onerror="this.src='/api/img?slug=${encodeURIComponent(c.slug)}';" />
+                <div class="continue-play-overlay">
+                    <div class="continue-play-btn" title="${t('hero.resume', 'Reprendre')}">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21"></polygon></svg>
+                    </div>
+                </div>
+                <div class="continue-progress-bar">
+                    <div class="continue-progress-fill" style="width: ${c.progressPercent}%;"></div>
+                </div>
+            </div>
+            <div class="continue-info">
+                <div class="continue-header" onclick="openDetailModal('${escapeHtml(c.slug)}')">
+                    <span class="continue-title" title="${escapeHtml(c.title)}">${escapeHtml(c.title)}</span>
+                    <button class="continue-info-btn" onclick="event.stopPropagation(); openDetailModal('${escapeHtml(c.slug)}');" title="${t('hero.info', 'Plus d\'infos')}">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                    </button>
+                </div>
+                <div class="continue-subtitle" onclick="openDetailModal('${escapeHtml(c.slug)}')">
+                    <span>S${c.seasonNum} • Ep ${c.episode}</span>
+                    ${curMins > 0 ? `<span class="continue-time">${curMins} min</span>` : ''}
+                </div>
             </div>
         </div>
     `;

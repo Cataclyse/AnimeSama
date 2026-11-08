@@ -309,7 +309,25 @@ async function openDetailModal(slug) {
             loadSeasonEpisodes(anime.slug, targetPath);
         };
 
-        const initialPath = getSeasonPathForLang(seasons[0].path, State.selectedLanguage);
+        let targetSeasonPath = seasons[0].path;
+        const savedProgress = getPlaybackProgress(anime.slug);
+        const historyItem = (State.userData && State.userData.history)
+            ? State.userData.history.find(h => h.slug === anime.slug)
+            : null;
+        const lastSeason = (savedProgress && savedProgress.season)
+            ? savedProgress.season
+            : (historyItem && historyItem.season ? historyItem.season : null);
+
+        if (lastSeason) {
+            const lastSeasonBase = lastSeason.split('/')[0].toLowerCase();
+            const matchedSeason = seasons.find(s => s.path && s.path.split('/')[0].toLowerCase() === lastSeasonBase);
+            if (matchedSeason) {
+                targetSeasonPath = matchedSeason.path;
+            }
+        }
+
+        DOM.modalSeasonSelect.value = targetSeasonPath;
+        const initialPath = getSeasonPathForLang(targetSeasonPath, State.selectedLanguage);
         await loadSeasonEpisodes(anime.slug, initialPath);
     } catch (e) {
         console.error('Erreur chargement détails anime:', e);
@@ -450,13 +468,26 @@ function renderEpisodesGrid() {
     if (view === 'compact') {
         DOM.modalEpisodesGrid.innerHTML = urls.map((url, idx) => {
             const epNum = idx + 1;
-            const isWatched = epNum <= lastWatchedEp;
+            const epProg = getEpisodeProgress(slug, epNum, season);
+            let progressPercent = 0;
+            if (epProg && epProg.currentTime > 5) {
+                if (epProg.duration && epProg.duration > 60 && epProg.currentTime >= epProg.duration - 20) {
+                    progressPercent = 100;
+                } else {
+                    progressPercent = Math.min(100, Math.round((epProg.currentTime / (epProg.duration || 1440)) * 100));
+                }
+            } else if (isWatched && epNum < lastWatchedEp) {
+                progressPercent = 100;
+            }
+            const isCompleted = progressPercent >= 90;
             const isCurrent = epNum === lastWatchedEp;
+
             return `
-                <button class="ep-btn ${isWatched ? 'watched' : ''} ${isCurrent ? 'active' : ''}" 
+                <button class="ep-btn ${isCompleted ? 'watched' : ''} ${isCurrent ? 'active' : ''}" 
                         onclick="openEpisodePlayer('${escapeHtml(slug)}', '${escapeHtml(season)}', ${idx})"
                         title="${t('modal.episode_label', 'Épisode')} ${epNum}">
-                    Ep ${epNum}
+                    <span>Ep ${epNum}</span>
+                    ${progressPercent > 0 ? `<span class="ep-btn-progress"><span class="ep-btn-progress-fill" style="width: ${progressPercent}%;"></span></span>` : ''}
                 </button>
             `;
         }).join('');
@@ -465,8 +496,6 @@ function renderEpisodesGrid() {
 
     DOM.modalEpisodesGrid.innerHTML = urls.map((url, idx) => {
         const epNum = idx + 1;
-        const isWatched = epNum <= lastWatchedEp;
-        const isCurrent = epNum === lastWatchedEp;
         const isScan = season.toLowerCase().startsWith('scan');
 
         const epMeta = (State.episodesMetadata && State.episodesMetadata[epNum]) ? State.episodesMetadata[epNum] : null;
@@ -480,7 +509,7 @@ function renderEpisodesGrid() {
             ? epMeta.synopsis
             : defaultDesc;
 
-        const epProg = getEpisodeProgress(slug, epNum);
+        const epProg = getEpisodeProgress(slug, epNum, season);
         let progressPercent = 0;
         if (epProg && epProg.currentTime > 5) {
             if (epProg.duration && epProg.duration > 60 && epProg.currentTime >= epProg.duration - 20) {
@@ -488,12 +517,15 @@ function renderEpisodesGrid() {
             } else {
                 progressPercent = Math.min(100, Math.round((epProg.currentTime / (epProg.duration || 1440)) * 100));
             }
-        } else if (isWatched) {
+        } else if (isWatched && epNum < lastWatchedEp) {
             progressPercent = 100;
         }
 
+        const isCurrent = epNum === lastWatchedEp;
+        const isCompleted = progressPercent >= 90;
+
         return `
-            <div class="ep-card ${isCurrent ? 'active' : ''} ${isWatched ? 'watched' : ''}" 
+            <div class="ep-card ${isCurrent ? 'active' : ''} ${isCompleted ? 'watched' : ''}" 
                  data-ep="${epNum}"
                  onclick="openEpisodePlayer('${escapeHtml(slug)}', '${escapeHtml(season)}', ${idx})">
                 <div class="ep-card-num">${epNum}</div>

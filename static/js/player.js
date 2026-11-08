@@ -1033,6 +1033,9 @@ function closePlayerModal() {
     updateAppTitle(false);
     renderEpisodesGrid();
     updateModalPlayButton(State.currentAnime);
+    if (typeof renderHomeRows === 'function' && document.getElementById('viewHome') && document.getElementById('viewHome').classList.contains('active')) {
+        renderHomeRows();
+    }
 
     const audioModal = document.getElementById('netflixAudioSubModal');
     if (audioModal) audioModal.style.display = 'none';

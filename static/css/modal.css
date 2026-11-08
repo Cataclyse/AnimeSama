@@ -574,12 +574,15 @@
     right: 0;
     height: 4px;
     background: rgba(255, 255, 255, 0.25);
+    z-index: 5;
+    overflow: hidden;
 }
 
 .ep-card-progress-fill {
     height: 100%;
-    width: 100%;
-    background: var(--accent);
+    background: #e50914;
+    border-radius: 0 2px 2px 0;
+    transition: width 0.2s ease;
 }
 
 .ep-card-info {
@@ -642,6 +645,8 @@
 }
 
 .ep-btn {
+    position: relative;
+    overflow: hidden;
     background: #232323;
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: #fff;
@@ -652,6 +657,24 @@
     cursor: pointer;
     text-align: center;
     transition: var(--transition-smooth);
+}
+
+.ep-btn-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.2);
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.ep-btn-progress-fill {
+    display: block;
+    height: 100%;
+    background: #e50914;
+    transition: width 0.2s ease;
 }
 
 .ep-btn:hover {
