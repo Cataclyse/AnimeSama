@@ -149,6 +149,8 @@ fn main() {
                     ..
                 } => {
                     println!("[Info] Fermeture de l'application.");
+                    crate::discord::clear_presence();
+                    std::thread::sleep(std::time::Duration::from_millis(150));
                     *control_flow = ControlFlow::Exit;
                 }
                 _ => (),

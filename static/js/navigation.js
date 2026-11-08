@@ -1,5 +1,13 @@
 function switchView(viewName) {
-    
+    const playerModal = document.getElementById('playerModal');
+    if (playerModal && playerModal.classList.contains('open') && typeof closePlayerModal === 'function') {
+        closePlayerModal();
+    }
+    const detailModal = document.getElementById('detailModal');
+    if (detailModal && detailModal.classList.contains('open') && typeof closeDetailModal === 'function') {
+        closeDetailModal();
+    }
+
     document.querySelectorAll('.nav-link').forEach(link => {
         link.classList.toggle('active', link.dataset.view === viewName);
     });

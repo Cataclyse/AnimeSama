@@ -572,4 +572,11 @@ function renderEpisodesGrid() {
 function closeDetailModal() {
     DOM.detailModal.classList.remove('open');
     document.body.style.overflow = 'auto';
+    const playerModal = document.getElementById('playerModal');
+    if (!playerModal || !playerModal.classList.contains('open')) {
+        document.title = 'Anime-Sama — Page d\'accueil';
+        if (typeof sendNavigationRpc === 'function') {
+            sendNavigationRpc('Page d\'accueil');
+        }
+    }
 }

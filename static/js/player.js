@@ -25,6 +25,10 @@ let lastDiscordRpcCurrentTime = 0;
 let lastDiscordRpcTimeRecordedAt = 0;
 
 function syncDiscordRpc(force = false) {
+    const modal = document.getElementById('playerModal');
+    if (!modal || !modal.classList.contains('open')) {
+        return;
+    }
     const isPaused = !!playerState.paused;
     const currentStatus = isPaused ? 'paused' : 'playing';
     const epNum = State.currentEpIndex !== undefined ? (State.currentEpIndex + 1) : 1;
@@ -35,10 +39,6 @@ function syncDiscordRpc(force = false) {
         if (lastDiscordRpcStatus !== currentStatus || lastDiscordRpcEpisode !== epNum) {
             force = true;
         } else if (currentStatus === 'playing') {
-            // Discord affiche l'elapsed en continu a partir du timestamp de depart :
-            // on ne renvoie une update que sur un vrai seek, jamais pour la derive naturelle
-            // de lecture (sinon le timestamp est recalcule a chaque fois et Discord throttle
-            // les mises a jour, ce qui donne l'impression de sauts toutes les ~15s).
             const expectedTime = lastDiscordRpcCurrentTime + (now - lastDiscordRpcTimeRecordedAt) / 1000;
             if (Math.abs(curTime - expectedTime) > 10) {
                 force = true;
@@ -454,6 +454,8 @@ function updateFromVideoElement(v) {
 }
 
 function syncPlaybackState(currentTime, duration, bufferedEnd, paused, volume, muted) {
+    const modal = document.getElementById('playerModal');
+    if (!modal || !modal.classList.contains('open')) return;
     playerState.currentTime = currentTime;
     if (duration > 0) playerState.duration = duration;
     playerState.bufferedEnd = bufferedEnd;
@@ -1259,15 +1261,29 @@ function changeEpisode(delta) {
 }
 
 function closePlayerModal() {
-    lastDiscordRpcStatus = null;
+    stopPlayerPolling();
+    stopDynamicFilter();
+    flushCurrentPlayback();
+    clearInterval(playerState.nextCountdownTimer);
+
+    const modal = document.getElementById('playerModal');
+    if (modal) modal.classList.remove('open');
+
+    const iframe = document.getElementById('videoIframe');
+    if (iframe) {
+        iframe.onload = null;
+        iframe.src = 'about:blank';
+    }
+
+    playerState.paused = true;
+    playerState.currentTime = 0;
+    lastDiscordRpcStatus = 'idle';
     lastDiscordRpcEpisode = null;
     lastDiscordRpcCurrentTime = 0;
     lastDiscordRpcTimeRecordedAt = 0;
+
     sendNavigationRpc('Page d\'accueil');
-    stopDynamicFilter();
-    flushCurrentPlayback();
-    stopPlayerPolling();
-    clearInterval(playerState.nextCountdownTimer);
+    updateAppTitle(false);
 
     if (window.ipc && typeof window.ipc.postMessage === 'function') {
         window.ipc.postMessage('exit_fullscreen');
@@ -1282,14 +1298,7 @@ function closePlayerModal() {
     }
     updateFullscreenIcons();
 
-    const modal = document.getElementById('playerModal');
-    if (modal) modal.classList.remove('open');
-
-    const iframe = document.getElementById('videoIframe');
-    if (iframe) iframe.src = '';
-
     document.body.style.overflow = 'auto';
-    updateAppTitle(false);
     renderEpisodesGrid();
     updateModalPlayButton(State.currentAnime);
     if (typeof renderHomeRows === 'function' && document.getElementById('viewHome') && document.getElementById('viewHome').classList.contains('active')) {
@@ -1422,6 +1431,8 @@ function initNetflixPlayerEvents() {
 
     window.addEventListener('message', (ev) => {
         if (!ev.data) return;
+        const modal = document.getElementById('playerModal');
+        if (!modal || !modal.classList.contains('open')) return;
 
         if (ev.data.type === 'AS_PLAYBACK_PROGRESS') {
             const ct = parseFloat(ev.data.currentTime) || 0;
