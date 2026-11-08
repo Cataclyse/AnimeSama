@@ -373,6 +373,29 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
             }).to_string());
         }
 
+        ("GET", "/api/update/check") => {
+            match crate::update::check_for_updates() {
+                Ok(info) => respond_json(req, &json!(info).to_string()),
+                Err(e) => respond_error(req, 500, &e),
+            }
+        }
+
+        ("POST", "/api/update/apply") => {
+            match crate::update::apply_update() {
+                Ok(res) => respond_json(req, &json!(res).to_string()),
+                Err(e) => respond_error(req, 500, &e),
+            }
+        }
+
+        ("POST", "/api/update/open-release") => {
+            let mut content = String::new();
+            let _ = req.as_reader().read_to_string(&mut content);
+            let parsed: serde_json::Value = serde_json::from_str(&content).unwrap_or_default();
+            let url = parsed.get("url").and_then(|v| v.as_str()).unwrap_or("https://github.com/Cataclyse/AnimeSama/releases");
+            let _ = opener::open(url);
+            respond_json(req, &json!({ "opened": true }).to_string());
+        }
+
         _ => {
             respond_error(req, 404, "Page non trouvée");
         }

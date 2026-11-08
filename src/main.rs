@@ -3,6 +3,7 @@ mod catalogue;
 mod proxy;
 mod scraper;
 mod server;
+mod update;
 mod user;
 
 use std::env;

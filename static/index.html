@@ -424,6 +424,18 @@
                 </div>
             </div>
             <div class="settings-lang-grid" id="settingsLangGrid"></div>
+
+            <div class="netflix-section-heading" data-i18n="settings.section_updates">MISES À JOUR DU LOGICIEL</div>
+            <div class="netflix-settings-row">
+                <div class="netflix-row-info">
+                    <div class="netflix-row-label" id="updateStatusTitle" data-i18n="settings.update_status">Version actuelle : v0.1.0</div>
+                    <div class="netflix-row-desc" id="updateStatusDesc" data-i18n="settings.update_desc">Vérifiez si une nouvelle version est disponible sur GitHub</div>
+                </div>
+                <div class="netflix-row-action" style="display: flex; gap: 8px;">
+                    <button class="btn-netflix-gray" id="checkUpdateBtn" onclick="checkForUpdatesManual()" data-i18n="settings.check_updates">↻ Vérifier</button>
+                    <button class="btn-netflix-primary" id="applyUpdateBtn" onclick="applyUpdateDirect()" style="display: none;" data-i18n="settings.install_update">Mettre à jour</button>
+                </div>
+            </div>
         </div>
     </div>
 

@@ -185,3 +185,100 @@ async function runSync(direction = 'auto') {
         DOM.syncAutoBtn.classList.remove('syncing');
     }
 }
+
+let currentUpdateInfo = null;
+
+async function checkForUpdates(silent = false) {
+    const btn = document.getElementById('checkUpdateBtn');
+    const title = document.getElementById('updateStatusTitle');
+    const desc = document.getElementById('updateStatusDesc');
+    const applyBtn = document.getElementById('applyUpdateBtn');
+
+    if (!silent && btn) {
+        btn.disabled = true;
+        btn.textContent = t('settings.checking_updates', 'Vérification...');
+    }
+
+    try {
+        const res = await fetch('/api/update/check');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur');
+
+        currentUpdateInfo = data;
+        const currentV = data.current_version || '0.1.0';
+
+        if (title) {
+            title.textContent = `${t('settings.version_current', 'Version')} : v${currentV}`;
+        }
+
+        if (data.update_available) {
+            if (desc) {
+                desc.textContent = `🎉 ${t('settings.update_available', 'Nouvelle version')} ${data.latest_version} ${t('settings.available', 'disponible !')}`;
+                desc.style.color = '#46d369';
+            }
+            if (applyBtn) {
+                applyBtn.style.display = 'inline-block';
+                applyBtn.textContent = `${t('settings.install_update', 'Mettre à jour')} (${data.latest_version})`;
+            }
+            if (silent) {
+                showToast(`🎉 ${t('settings.update_available', 'Nouvelle version')} ${data.latest_version} ${t('settings.available', 'disponible !')}`);
+            }
+        } else {
+            if (desc) {
+                desc.textContent = t('settings.up_to_date', 'Vous utilisez la dernière version.');
+                desc.style.color = '#a3a3a3';
+            }
+            if (applyBtn) {
+                applyBtn.style.display = 'none';
+            }
+            if (!silent) {
+                showToast(t('settings.up_to_date', 'Vous utilisez la dernière version.'));
+            }
+        }
+    } catch (e) {
+        if (!silent) {
+            showToast(t('settings.update_error', 'Impossible de vérifier les mises à jour'));
+        }
+    } finally {
+        if (!silent && btn) {
+            btn.disabled = false;
+            btn.textContent = t('settings.check_updates', '↻ Vérifier');
+        }
+    }
+}
+
+function checkForUpdatesManual() {
+    checkForUpdates(false);
+}
+
+async function applyUpdateDirect() {
+    const applyBtn = document.getElementById('applyUpdateBtn');
+    if (applyBtn) {
+        applyBtn.disabled = true;
+        applyBtn.textContent = t('settings.updating', 'Téléchargement en cours...');
+    }
+
+    try {
+        const res = await fetch('/api/update/apply', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur lors de la mise à jour');
+
+        showToast(data.message || t('settings.update_success', 'Mise à jour réussie !'));
+        const desc = document.getElementById('updateStatusDesc');
+        if (desc) {
+            desc.textContent = data.message;
+            desc.style.color = '#46d369';
+        }
+    } catch (e) {
+        showToast(t('settings.update_error', 'Erreur de mise à jour') + ' : ' + e.message);
+    } finally {
+        if (applyBtn) {
+            applyBtn.disabled = false;
+            applyBtn.textContent = t('settings.install_update', 'Mettre à jour');
+        }
+    }
+}
+
+setTimeout(() => {
+    checkForUpdates(true);
+}, 3000);
