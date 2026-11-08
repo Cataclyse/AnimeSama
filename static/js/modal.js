@@ -156,28 +156,54 @@ function updateModalPlayButton(anime) {
                 DOM.modalHeroProgressFill.style.width = `${pct}%`;
             }
         }
+        const activeSeason = (DOM.modalSeasonSelect && DOM.modalSeasonSelect.value) ? DOM.modalSeasonSelect.value : '';
+        const isScan = activeSeason.toLowerCase().startsWith('scan') || !!(State.currentEpisodes && State.currentEpisodes.scan_data);
+
         if (DOM.modalPlayBtnText) {
-            DOM.modalPlayBtnText.textContent = `${t('modal.resume_ep', 'Reprendre Ep')} ${progForThisSeason.episode} (${curMins} min)`;
+            if (isScan) {
+                DOM.modalPlayBtnText.textContent = `Lire CH ${progForThisSeason.episode}`;
+            } else {
+                DOM.modalPlayBtnText.textContent = `${t('modal.resume_ep', 'Reprendre Ep')} ${progForThisSeason.episode} (${curMins} min)`;
+            }
         }
     } else if (lastWatchedEp > 0) {
+        const activeSeason = (DOM.modalSeasonSelect && DOM.modalSeasonSelect.value) ? DOM.modalSeasonSelect.value : '';
+        const isScan = activeSeason.toLowerCase().startsWith('scan') || !!(State.currentEpisodes && State.currentEpisodes.scan_data);
+
         if (DOM.modalHeroProgress) {
             DOM.modalHeroProgress.style.display = 'flex';
-            if (DOM.modalHeroProgressLabel) DOM.modalHeroProgressLabel.textContent = `${t('modal.episode_label', 'Épisode')} ${lastWatchedEp}`;
+            if (DOM.modalHeroProgressLabel) DOM.modalHeroProgressLabel.textContent = isScan ? `Chapitre ${lastWatchedEp}` : `${t('modal.episode_label', 'Épisode')} ${lastWatchedEp}`;
             if (DOM.modalHeroProgressFill) DOM.modalHeroProgressFill.style.width = '75%';
         }
-        if (DOM.modalPlayBtnText) DOM.modalPlayBtnText.textContent = `${t('modal.resume_ep', 'Reprendre Ep')} ${lastWatchedEp}`;
+        if (DOM.modalPlayBtnText) {
+            DOM.modalPlayBtnText.textContent = isScan ? `Lire CH ${lastWatchedEp}` : `${t('modal.resume_ep', 'Reprendre Ep')} ${lastWatchedEp}`;
+        }
     } else {
+        const activeSeason = (DOM.modalSeasonSelect && DOM.modalSeasonSelect.value) ? DOM.modalSeasonSelect.value : '';
+        const isScan = activeSeason.toLowerCase().startsWith('scan') || !!(State.currentEpisodes && State.currentEpisodes.scan_data);
+
         if (DOM.modalHeroProgress) DOM.modalHeroProgress.style.display = 'none';
-        if (DOM.modalPlayBtnText) DOM.modalPlayBtnText.textContent = t('modal.play', 'Lecture');
+        if (DOM.modalPlayBtnText) DOM.modalPlayBtnText.textContent = isScan ? 'Lire' : t('modal.play', 'Lecture');
     }
 
     const targetEp = lastWatchedEp > 0 ? lastWatchedEp : 1;
     const targetIdx = Math.max(0, targetEp - 1);
 
     if (DOM.modalFeaturedEpTitle) {
-        const epMeta = (State.episodesMetadata && State.episodesMetadata[targetEp]) ? State.episodesMetadata[targetEp] : null;
-        const epTitle = (epMeta && epMeta.title) ? epMeta.title : `${t('modal.episode_label', 'Épisode')} ${targetEp}`;
-        DOM.modalFeaturedEpTitle.textContent = `S${seasonNum}:E${targetEp} "${epTitle}"`;
+        const activeSeason = (DOM.modalSeasonSelect && DOM.modalSeasonSelect.value) ? DOM.modalSeasonSelect.value : '';
+        const isScan = activeSeason.toLowerCase().startsWith('scan') || !!(State.currentEpisodes && State.currentEpisodes.scan_data);
+
+        if (isScan) {
+            const scanChap = (State.currentEpisodes && State.currentEpisodes.scan_data && State.currentEpisodes.scan_data.chapters)
+                ? State.currentEpisodes.scan_data.chapters[targetIdx]
+                : null;
+            const chapTitle = scanChap ? scanChap.name : `Chapitre ${targetEp}`;
+            DOM.modalFeaturedEpTitle.textContent = `${chapTitle} • Scan`;
+        } else {
+            const epMeta = (State.episodesMetadata && State.episodesMetadata[targetEp]) ? State.episodesMetadata[targetEp] : null;
+            const epTitle = (epMeta && epMeta.title) ? epMeta.title : `${t('modal.episode_label', 'Épisode')} ${targetEp}`;
+            DOM.modalFeaturedEpTitle.textContent = `S${seasonNum}:E${targetEp} "${epTitle}"`;
+        }
     }
 
     if (DOM.modalPlayBtn) {
@@ -469,6 +495,11 @@ function renderEpisodesGrid() {
     if (view === 'compact') {
         DOM.modalEpisodesGrid.innerHTML = urls.map((url, idx) => {
             const epNum = idx + 1;
+            const isScan = season.toLowerCase().startsWith('scan') || !!(State.currentEpisodes && State.currentEpisodes.scan_data);
+            const scanChap = (isScan && State.currentEpisodes && State.currentEpisodes.scan_data && State.currentEpisodes.scan_data.chapters)
+                ? State.currentEpisodes.scan_data.chapters[idx]
+                : null;
+            const labelText = scanChap ? scanChap.name.replace(/Chapitre\s*/i, 'CH ') : `Ep ${epNum}`;
             const epProg = getEpisodeProgress(slug, epNum, season);
             let progressPercent = 0;
             if (epProg && epProg.currentTime > 5) {
@@ -486,8 +517,8 @@ function renderEpisodesGrid() {
             return `
                 <button class="ep-btn ${isCompleted ? 'watched' : ''} ${isCurrent ? 'active' : ''}" 
                         onclick="openEpisodePlayer('${escapeHtml(slug)}', '${escapeHtml(season)}', ${idx})"
-                        title="${t('modal.episode_label', 'Épisode')} ${epNum}">
-                    <span>Ep ${epNum}</span>
+                        title="${escapeHtml(scanChap ? scanChap.name : `${t('modal.episode_label', 'Épisode')} ${epNum}`)}">
+                    <span>${escapeHtml(labelText)}</span>
                     ${progressPercent > 0 ? `<span class="ep-btn-progress"><span class="ep-btn-progress-fill" style="width: ${progressPercent}%;"></span></span>` : ''}
                 </button>
             `;
@@ -497,15 +528,21 @@ function renderEpisodesGrid() {
 
     DOM.modalEpisodesGrid.innerHTML = urls.map((url, idx) => {
         const epNum = idx + 1;
-        const isScan = season.toLowerCase().startsWith('scan');
+        const isScan = season.toLowerCase().startsWith('scan') || !!(State.currentEpisodes && State.currentEpisodes.scan_data);
+        const scanChap = (isScan && State.currentEpisodes && State.currentEpisodes.scan_data && State.currentEpisodes.scan_data.chapters)
+            ? State.currentEpisodes.scan_data.chapters[idx]
+            : null;
 
-        const epMeta = (State.episodesMetadata && State.episodesMetadata[epNum]) ? State.episodesMetadata[epNum] : null;
+        const epMeta = (!isScan && State.episodesMetadata && State.episodesMetadata[epNum]) ? State.episodesMetadata[epNum] : null;
 
         const epThumb = (epMeta && epMeta.thumbnail) ? epMeta.thumbnail : bannerUrl;
-        const epTitle = (epMeta && epMeta.title) ? epMeta.title : `${t('modal.episode_label', 'Épisode')} ${epNum}`;
-        const epDuration = isScan ? 'Scan' : ((epMeta && epMeta.length) ? `${epMeta.length} min` : '24 min');
+        const epTitle = scanChap ? scanChap.name : ((epMeta && epMeta.title) ? epMeta.title : `${t('modal.episode_label', 'Épisode')} ${epNum}`);
+        const epDuration = isScan ? (scanChap && scanChap.pages ? `${scanChap.pages} pages` : 'Scan') : ((epMeta && epMeta.length) ? `${epMeta.length} min` : '24 min');
+        const badgeText = isScan ? (scanChap ? scanChap.name.replace(/Chapitre\s*/i, 'CH ') : `CH ${epNum}`) : `EP ${epNum}`;
 
-        const defaultDesc = `${t('modal.episode_label', 'Épisode')} ${epNum} • ${t('modal.season_label', 'Saison')} ${seasonNum}.`;
+        const defaultDesc = isScan
+            ? `${epTitle} • ${scanChap && scanChap.pages ? `${scanChap.pages} pages` : 'Scan'}`
+            : `${t('modal.episode_label', 'Épisode')} ${epNum} • ${t('modal.season_label', 'Saison')} ${seasonNum}.`;
         const epDesc = (epMeta && epMeta.synopsis && epMeta.synopsis.trim().length > 0)
             ? epMeta.synopsis
             : defaultDesc;
@@ -533,7 +570,7 @@ function renderEpisodesGrid() {
                 <div class="ep-card-thumb-wrap">
                     <img class="ep-card-thumb" 
                          src="${escapeHtml(epThumb)}" 
-                         alt="${t('modal.episode_label', 'Épisode')} ${epNum}" 
+                         alt="${escapeHtml(epTitle)}" 
                          loading="lazy" 
                          onerror="this.onerror=null; this.src='${escapeHtml(bannerUrl)}';" />
                     <div class="ep-card-play-overlay">
@@ -541,7 +578,7 @@ function renderEpisodesGrid() {
                             <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21"></polygon></svg>
                         </div>
                     </div>
-                    <span class="ep-card-thumb-badge">EP ${epNum}</span>
+                    <span class="ep-card-thumb-badge">${escapeHtml(badgeText)}</span>
                     ${progressPercent > 0 ? `<div class="ep-card-progress"><div class="ep-card-progress-fill" style="width: ${progressPercent}%;"></div></div>` : ''}
                 </div>
                 <div class="ep-card-info">

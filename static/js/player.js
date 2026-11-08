@@ -24,15 +24,38 @@ let lastDiscordRpcEpisode = null;
 let lastDiscordRpcCurrentTime = 0;
 let lastDiscordRpcTimeRecordedAt = 0;
 
+let scanState = {
+    active: false,
+    mode: 'scroll',
+    slug: '',
+    season: '',
+    chapterIndex: 0,
+    currentPage: 1,
+    totalPages: 1,
+    oeuvre: '',
+    chapters: [],
+    encodedOeuvre: ''
+};
+
+function isScanSeason(season) {
+    if (!season && State.currentEpisodes && State.currentEpisodes.season) {
+        season = State.currentEpisodes.season;
+    }
+    const s = (season || '').toLowerCase();
+    return s.startsWith('scan') || s.includes('scan') || !!(State.currentEpisodes && State.currentEpisodes.scan_data);
+}
+
 function syncDiscordRpc(force = false) {
     const modal = document.getElementById('playerModal');
     if (!modal || !modal.classList.contains('open')) {
         return;
     }
-    const isPaused = !!playerState.paused;
-    const currentStatus = isPaused ? 'paused' : 'playing';
-    const epNum = State.currentEpIndex !== undefined ? (State.currentEpIndex + 1) : 1;
-    const curTime = playerState.currentTime || 0;
+    const isScan = scanState.active || isScanSeason(State.currentEpisodes ? State.currentEpisodes.season : '');
+    const isPaused = !isScan && !!playerState.paused;
+    const currentStatus = isScan ? 'reading' : (isPaused ? 'paused' : 'playing');
+    const epNum = isScan ? (scanState.chapterIndex + 1) : (State.currentEpIndex !== undefined ? (State.currentEpIndex + 1) : 1);
+    const curTime = isScan ? 0 : (playerState.currentTime || 0);
+    const durTime = isScan ? null : Math.floor(playerState.duration || 0);
     const now = Date.now();
 
     if (!force) {
@@ -68,8 +91,8 @@ function syncDiscordRpc(force = false) {
             episode: epNum,
             season: season,
             status: currentStatus,
-            duration: Math.floor(playerState.duration || 0),
-            current_time: Math.floor(curTime),
+            duration: durTime,
+            current_time: isScan ? null : Math.floor(curTime),
             poster: poster
         })
     }).catch(() => {});
@@ -138,11 +161,260 @@ function sendFrameMessage(msg) {
 function updateAppTitle(isPlaying) {
     if (isPlaying && State.currentAnime) {
         const title = State.currentAnime.title || State.currentAnime.slug;
+        const isScan = scanState.active || isScanSeason(State.currentEpisodes ? State.currentEpisodes.season : '');
         const ep = (State.currentEpIndex !== undefined) ? (State.currentEpIndex + 1) : 1;
-        const lang = (State.selectedLanguage || 'vostfr').toUpperCase();
-        document.title = `Anime-Sama — ${title} — Ep ${ep} (${lang})`;
+        const lang = (State.selectedLanguage || 'vf').toUpperCase();
+        if (isScan) {
+            document.title = `Anime-Sama — ${title} — Chapitre ${ep}`;
+        } else {
+            document.title = `Anime-Sama — ${title} — Ep ${ep} (${lang})`;
+        }
     } else {
         document.title = 'Anime-Sama — Page d\'accueil';
+    }
+}
+
+function openScanViewer(slug, season, chapterIndex) {
+    scanState.active = true;
+    scanState.slug = slug;
+    scanState.season = season;
+    scanState.chapterIndex = parseInt(chapterIndex, 10) || 0;
+
+    try {
+        const savedMode = localStorage.getItem('as_scan_reading_mode');
+        if (savedMode === 'page' || savedMode === 'scroll') {
+            scanState.mode = savedMode;
+        }
+    } catch (e) {}
+
+    const scanData = State.currentEpisodes ? State.currentEpisodes.scan_data : null;
+    scanState.oeuvre = scanData ? scanData.oeuvre : (State.currentAnime ? State.currentAnime.title : slug);
+    scanState.chapters = scanData ? scanData.chapters : [];
+    scanState.encodedOeuvre = encodeURIComponent(scanState.oeuvre);
+
+    const videoViewport = document.getElementById('netflixVideoViewport');
+    const scanViewport = document.getElementById('netflixScanViewport');
+    const bottomBar = document.getElementById('netflixBottomBar');
+    const scanBar = document.getElementById('netflixScanBar');
+    const scanModeBtn = document.getElementById('netflixScanModeBtn');
+    const scanModeLabel = document.getElementById('netflixScanModeLabel');
+    const centerPulse = document.getElementById('netflixCenterPulse');
+    const nextPrompt = document.getElementById('netflixNextPrompt');
+    const pillBtn = document.getElementById('netflixPillBtn');
+    const skipBtn = document.getElementById('netflixSkipIntroBtn');
+
+    if (videoViewport) videoViewport.style.display = 'none';
+    if (centerPulse) centerPulse.style.display = 'none';
+    if (nextPrompt) nextPrompt.style.display = 'none';
+    if (skipBtn) skipBtn.style.display = 'none';
+    if (bottomBar) bottomBar.style.display = 'none';
+    if (pillBtn) pillBtn.style.display = 'none';
+
+    if (scanViewport) scanViewport.style.display = 'flex';
+    if (scanBar) scanBar.style.display = 'flex';
+    if (scanModeBtn) {
+        scanModeBtn.style.display = 'inline-flex';
+        if (scanModeLabel) {
+            scanModeLabel.textContent = scanState.mode === 'scroll' ? 'Défilement' : 'Page par page';
+        }
+    }
+
+    const modal = document.getElementById('playerModal');
+    if (modal) modal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+
+    renderScanChapterSelect();
+    loadScanChapter(scanState.chapterIndex, 1);
+}
+
+function renderScanChapterSelect() {
+    const select = document.getElementById('netflixScanChapSelect');
+    if (!select) return;
+    const chaps = scanState.chapters;
+    if (chaps && chaps.length) {
+        select.innerHTML = chaps.map((c, i) => `
+            <option value="${i}" ${i === scanState.chapterIndex ? 'selected' : ''}>${escapeHtml(c.name)}</option>
+        `).join('');
+    } else {
+        const total = State.currentEpisodes ? (State.currentEpisodes.total_episodes || 1) : 1;
+        const opts = [];
+        for (let i = 0; i < total; i++) {
+            opts.push(`<option value="${i}" ${i === scanState.chapterIndex ? 'selected' : ''}>Chapitre ${i + 1}</option>`);
+        }
+        select.innerHTML = opts.join('');
+    }
+}
+
+function onScanChapSelectChange(val) {
+    const idx = parseInt(val, 10);
+    if (!isNaN(idx)) {
+        loadScanChapter(idx, 1);
+    }
+}
+
+function toggleScanReadingMode() {
+    scanState.mode = scanState.mode === 'scroll' ? 'page' : 'scroll';
+    try {
+        localStorage.setItem('as_scan_reading_mode', scanState.mode);
+    } catch (e) {}
+
+    const scanModeLabel = document.getElementById('netflixScanModeLabel');
+    if (scanModeLabel) {
+        scanModeLabel.textContent = scanState.mode === 'scroll' ? 'Défilement' : 'Page par page';
+    }
+
+    loadScanChapter(scanState.chapterIndex, scanState.currentPage || 1);
+}
+
+function loadScanChapter(chapterIndex, pageNumber = 1) {
+    scanState.chapterIndex = chapterIndex;
+    const totalChapters = scanState.chapters.length || (State.currentEpisodes ? State.currentEpisodes.total_episodes : 1);
+    if (scanState.chapterIndex < 0) scanState.chapterIndex = 0;
+    if (scanState.chapterIndex >= totalChapters) scanState.chapterIndex = totalChapters - 1;
+
+    const chapMeta = scanState.chapters[scanState.chapterIndex];
+    const chapNum = chapMeta ? chapMeta.number : (scanState.chapterIndex + 1);
+    const chapName = chapMeta ? chapMeta.name : `Chapitre ${chapNum}`;
+    const pageCount = chapMeta ? (chapMeta.pages || 1) : 1;
+    scanState.totalPages = pageCount;
+    scanState.currentPage = Math.max(1, Math.min(pageNumber, pageCount));
+
+    const titleEl = document.getElementById('playerTitle');
+    const epTitleEl = document.getElementById('playerEpisodeTitle');
+    const animeTitle = State.currentAnime ? State.currentAnime.title : scanState.slug;
+    if (titleEl) titleEl.textContent = animeTitle;
+    if (epTitleEl) epTitleEl.textContent = `${chapName} • Scan`;
+
+    const select = document.getElementById('netflixScanChapSelect');
+    if (select) select.value = scanState.chapterIndex;
+
+    const prevBtn = document.getElementById('netflixScanBarPrevBtn');
+    const nextBtn = document.getElementById('netflixScanBarNextBtn');
+    if (prevBtn) prevBtn.disabled = scanState.chapterIndex <= 0;
+    if (nextBtn) nextBtn.disabled = scanState.chapterIndex >= totalChapters - 1;
+
+    updateScanPageInfo();
+
+    const scrollContainer = document.getElementById('netflixScanScroll');
+    const singleContainer = document.getElementById('netflixScanPageSingle');
+    const pagesContainer = document.getElementById('netflixScanPages');
+    const endContainer = document.getElementById('netflixScanEnd');
+    const endTitle = document.getElementById('netflixScanEndTitle');
+
+    if (scanState.mode === 'scroll') {
+        if (singleContainer) singleContainer.style.display = 'none';
+        if (scrollContainer) scrollContainer.style.display = 'flex';
+        if (pagesContainer) {
+            pagesContainer.innerHTML = '';
+            for (let i = 1; i <= pageCount; i++) {
+                const wrap = document.createElement('div');
+                wrap.className = 'netflix-scan-page-wrap';
+                wrap.innerHTML = `
+                    <span class="netflix-scan-page-badge">Page ${i} / ${pageCount}</span>
+                    <img class="netflix-scan-page-img"
+                         src="https://anime-sama.to/s2/scans/${scanState.encodedOeuvre}/${chapNum}/${i}.jpg"
+                         loading="lazy"
+                         decoding="async"
+                         alt="${escapeHtml(chapName)} - Page ${i}"
+                         onerror="this.onerror=null; this.src='/api/scan/img?oeuvre=${scanState.encodedOeuvre}&chapter=${chapNum}&page=${i}'" />
+                `;
+                pagesContainer.appendChild(wrap);
+            }
+        }
+        if (endContainer) {
+            endContainer.style.display = 'flex';
+            if (endTitle) {
+                endTitle.textContent = scanState.chapterIndex < totalChapters - 1
+                    ? `Fin du ${chapName}`
+                    : `Dernier chapitre atteint (${chapName})`;
+            }
+            const nextScanBtn = document.getElementById('netflixScanNextBtn');
+            if (nextScanBtn) {
+                nextScanBtn.style.display = scanState.chapterIndex < totalChapters - 1 ? 'inline-block' : 'none';
+            }
+        }
+        if (scrollContainer) scrollContainer.scrollTop = 0;
+    } else {
+        if (scrollContainer) scrollContainer.style.display = 'none';
+        if (singleContainer) singleContainer.style.display = 'flex';
+        renderScanSinglePage();
+    }
+
+    State.currentEpIndex = scanState.chapterIndex;
+    updateAppTitle(true);
+    recordHistory(scanState.slug, scanState.chapterIndex + 1);
+    syncDiscordRpc(true);
+}
+
+function renderScanSinglePage() {
+    const chapMeta = scanState.chapters[scanState.chapterIndex];
+    const chapNum = chapMeta ? chapMeta.number : (scanState.chapterIndex + 1);
+    const chapName = chapMeta ? chapMeta.name : `Chapitre ${chapNum}`;
+    const img = document.getElementById('netflixScanSingleImg');
+    if (!img) return;
+
+    img.alt = `${chapName} - Page ${scanState.currentPage}`;
+    img.src = `https://anime-sama.to/s2/scans/${scanState.encodedOeuvre}/${chapNum}/${scanState.currentPage}.jpg`;
+    img.onerror = function() {
+        this.onerror = null;
+        this.src = `/api/scan/img?oeuvre=${scanState.encodedOeuvre}&chapter=${chapNum}&page=${scanState.currentPage}`;
+    };
+
+    img.onclick = function(e) {
+        const rect = img.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        if (clickX < rect.width / 2) {
+            prevScanPage();
+        } else {
+            nextScanPage();
+        }
+    };
+
+    updateScanPageInfo();
+}
+
+function updateScanPageInfo() {
+    const pageInfo = document.getElementById('netflixScanBarPageInfo');
+    if (!pageInfo) return;
+    if (scanState.mode === 'page') {
+        pageInfo.textContent = `Page ${scanState.currentPage} / ${scanState.totalPages}`;
+    } else {
+        pageInfo.textContent = `${scanState.totalPages} pages`;
+    }
+}
+
+function prevScanPage() {
+    if (scanState.mode !== 'page') return;
+    if (scanState.currentPage > 1) {
+        scanState.currentPage--;
+        renderScanSinglePage();
+    } else if (scanState.chapterIndex > 0) {
+        const prevChap = scanState.chapters[scanState.chapterIndex - 1];
+        const prevPages = prevChap ? (prevChap.pages || 1) : 1;
+        loadScanChapter(scanState.chapterIndex - 1, prevPages);
+    }
+}
+
+function nextScanPage() {
+    if (scanState.mode !== 'page') return;
+    if (scanState.currentPage < scanState.totalPages) {
+        scanState.currentPage++;
+        renderScanSinglePage();
+    } else {
+        nextScanChapter();
+    }
+}
+
+function prevScanChapter() {
+    if (scanState.chapterIndex > 0) {
+        loadScanChapter(scanState.chapterIndex - 1, 1);
+    }
+}
+
+function nextScanChapter() {
+    const totalChapters = scanState.chapters.length || (State.currentEpisodes ? State.currentEpisodes.total_episodes : 1);
+    if (scanState.chapterIndex < totalChapters - 1) {
+        loadScanChapter(scanState.chapterIndex + 1, 1);
     }
 }
 
@@ -163,7 +435,7 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
         let normalizedSeason = seasonPath;
         if (!normalizedSeason || typeof normalizedSeason !== 'string') {
             normalizedSeason = 'saison1/vostfr';
-        } else if (!normalizedSeason.includes('/')) {
+        } else if (!normalizedSeason.includes('/') && !normalizedSeason.toLowerCase().startsWith('scan')) {
             normalizedSeason = `${normalizedSeason}/vostfr`;
         }
 
@@ -175,7 +447,7 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
                     const animeData = await animeRes.json();
                     if (animeData.seasons && animeData.seasons.length > 0) {
                         let altSeason = animeData.seasons[0].path;
-                        if (!altSeason.includes('/')) altSeason = `${altSeason}/vostfr`;
+                        if (!altSeason.includes('/') && !altSeason.toLowerCase().startsWith('scan')) altSeason = `${altSeason}/vostfr`;
                         normalizedSeason = altSeason;
                         res = await fetch(`/api/episodes?slug=${slug}&season=${encodeURIComponent(normalizedSeason)}`);
                     }
@@ -185,6 +457,11 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
             State.currentEpisodes = await res.json();
             const players = Object.keys(State.currentEpisodes.players || {});
             State.selectedPlayer = pickBestPlayer(players, State.selectedPlayer);
+        }
+
+        if (isScanSeason(normalizedSeason)) {
+            openScanViewer(slug, normalizedSeason, episodeIndex);
+            return;
         }
 
         const players = Object.keys(State.currentEpisodes.players || {});
@@ -1237,6 +1514,12 @@ function switchPlayerLanguage(newLang) {
 }
 
 function changeEpisode(delta) {
+    if (scanState.active) {
+        if (delta > 0) nextScanChapter();
+        else prevScanChapter();
+        return;
+    }
+
     if (playerState.isChangingEpisode) return;
     playerState.isChangingEpisode = true;
     setTimeout(() => {
@@ -1264,6 +1547,23 @@ function changeEpisode(delta) {
 }
 
 function closePlayerModal() {
+    scanState.active = false;
+    const scanViewport = document.getElementById('netflixScanViewport');
+    const scanBar = document.getElementById('netflixScanBar');
+    const scanModeBtn = document.getElementById('netflixScanModeBtn');
+    const scanPages = document.getElementById('netflixScanPages');
+    const videoViewport = document.getElementById('netflixVideoViewport');
+    const bottomBar = document.getElementById('netflixBottomBar');
+    const pillBtn = document.getElementById('netflixPillBtn');
+
+    if (scanViewport) scanViewport.style.display = 'none';
+    if (scanBar) scanBar.style.display = 'none';
+    if (scanModeBtn) scanModeBtn.style.display = 'none';
+    if (scanPages) scanPages.innerHTML = '';
+    if (videoViewport) videoViewport.style.display = 'block';
+    if (bottomBar) bottomBar.style.display = 'flex';
+    if (pillBtn) pillBtn.style.display = 'inline-flex';
+
     stopPlayerPolling();
     stopDynamicFilter();
     flushCurrentPlayback();
@@ -1485,6 +1785,28 @@ function initNetflixPlayerEvents() {
 
         const tag = (e.target && e.target.tagName || '').toUpperCase();
         if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target && e.target.isContentEditable)) return;
+
+        if (scanState.active) {
+            if (e.code === 'ArrowLeft') {
+                e.preventDefault();
+                prevScanPage();
+            } else if (e.code === 'ArrowRight') {
+                e.preventDefault();
+                nextScanPage();
+            } else if (e.key === 'n' || e.key === 'N') {
+                e.preventDefault();
+                nextScanChapter();
+            } else if (e.key === 'p' || e.key === 'P') {
+                e.preventDefault();
+                prevScanChapter();
+            } else if (e.key === 'm' || e.key === 'M') {
+                e.preventDefault();
+                toggleScanReadingMode();
+            } else if (e.key === 'Escape') {
+                closePlayerModal();
+            }
+            return;
+        }
 
         if (e.code === 'Space' || e.key === ' ' || e.key === 'k' || e.key === 'K') {
             e.preventDefault();

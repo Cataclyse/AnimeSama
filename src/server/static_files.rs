@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::Read;
 use std::path::Path;
 use tiny_http::{Header, Response, StatusCode};
 
@@ -9,6 +10,48 @@ pub fn serve_image(req: tiny_http::Request, slug: &str) {
         .with_header(Header::from_bytes(&b"Location"[..], cdn_url.as_bytes()).unwrap())
         .with_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
     let _ = req.respond(resp);
+}
+
+pub fn serve_scan_image(req: tiny_http::Request, oeuvre: &str, chapter: &str, page: &str) {
+    let clean_page = if page.ends_with(".jpg") {
+        page.to_string()
+    } else {
+        format!("{}.jpg", page)
+    };
+    let mut encoded_oeuvre = String::with_capacity(oeuvre.len() * 3);
+    for b in oeuvre.bytes() {
+        match b {
+            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                encoded_oeuvre.push(b as char);
+            }
+            b' ' => encoded_oeuvre.push_str("%20"),
+            _ => encoded_oeuvre.push_str(&format!("%{:02X}", b)),
+        }
+    }
+    let url = format!("https://anime-sama.to/s2/scans/{}/{}/{}", encoded_oeuvre, chapter, clean_page);
+    let resp = ureq::get(&url)
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .set("Referer", "https://anime-sama.to/")
+        .timeout(std::time::Duration::from_secs(10))
+        .call();
+
+    match resp {
+        Ok(r) => {
+            let mut bytes = Vec::new();
+            if r.into_reader().read_to_end(&mut bytes).is_ok() {
+                let tiny_resp = Response::from_data(bytes)
+                    .with_header(Header::from_bytes(&b"Content-Type"[..], &b"image/jpeg"[..]).unwrap())
+                    .with_header(Header::from_bytes(&b"Cache-Control"[..], &b"public, max-age=86400"[..]).unwrap())
+                    .with_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                let _ = req.respond(tiny_resp);
+            } else {
+                let _ = req.respond(Response::empty(StatusCode(502)));
+            }
+        }
+        Err(_) => {
+            let _ = req.respond(Response::empty(StatusCode(502)));
+        }
+    }
 }
 
 pub fn read_static_or(path: &str, fallback: &str) -> String {

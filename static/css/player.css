@@ -1013,3 +1013,269 @@ body.native-fullscreen .netflix-player-container {
     max-height: 100vh !important;
     border-radius: 0 !important;
 }
+
+.netflix-scan-viewport {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+    background: #06080d;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    user-select: none;
+}
+
+.netflix-scan-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    width: 100%;
+    padding-top: 76px;
+    padding-bottom: 84px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    scroll-behavior: smooth;
+}
+
+.netflix-scan-pages {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 900px;
+    gap: 6px;
+    margin: 0 auto;
+}
+
+.netflix-scan-page-wrap {
+    position: relative;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.netflix-scan-page-img {
+    width: 100%;
+    max-width: 900px;
+    height: auto;
+    display: block;
+    object-fit: contain;
+    background: #0a0d14;
+    min-height: 480px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    border-radius: 2px;
+}
+
+.netflix-scan-page-badge {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    background: rgba(0,0,0,0.7);
+    color: #cbd5e1;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+    backdrop-filter: blur(4px);
+    pointer-events: none;
+    letter-spacing: 0.3px;
+}
+
+.netflix-scan-end {
+    width: 100%;
+    max-width: 900px;
+    margin: 36px auto 48px;
+    display: flex;
+    justify-content: center;
+}
+
+.netflix-scan-end-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 24px 36px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    align-items: center;
+}
+
+.netflix-scan-end-title {
+    color: #e2e8f0;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.netflix-scan-next-btn {
+    background: #e50914;
+    color: #fff;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.15s;
+}
+
+.netflix-scan-next-btn:hover {
+    background: #f40612;
+    transform: scale(1.02);
+}
+
+.netflix-scan-page-single {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    padding: 72px 0 76px;
+    position: relative;
+}
+
+.netflix-scan-single-wrap {
+    height: 100%;
+    max-width: 92%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#netflixScanSingleImg {
+    max-height: calc(100vh - 160px);
+    max-width: 100%;
+    object-fit: contain;
+    cursor: pointer;
+    border-radius: 4px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.65);
+    background: #0a0d14;
+}
+
+.netflix-scan-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0,0,0,0.55);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.12);
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 20;
+    transition: all 0.2s;
+    backdrop-filter: blur(4px);
+}
+
+.netflix-scan-arrow:hover {
+    background: rgba(229,9,20,0.85);
+    border-color: transparent;
+    transform: translateY(-50%) scale(1.06);
+}
+
+.netflix-scan-arrow-left {
+    left: 24px;
+}
+
+.netflix-scan-arrow-right {
+    right: 24px;
+}
+
+.netflix-scan-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 68px;
+    background: linear-gradient(180deg, transparent 0%, rgba(5,7,12,0.92) 35%, #05070c 100%);
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 24px;
+    pointer-events: auto;
+}
+
+.netflix-scan-bar-content {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    max-width: 800px;
+    width: 100%;
+    justify-content: space-between;
+}
+
+.netflix-scan-bar-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #fff;
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.netflix-scan-bar-btn:hover:not(:disabled) {
+    background: rgba(255,255,255,0.16);
+    border-color: rgba(255,255,255,0.25);
+}
+
+.netflix-scan-bar-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.netflix-scan-bar-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.netflix-scan-chap-select {
+    background: rgba(18,24,38,0.92);
+    border: 1px solid rgba(255,255,255,0.16);
+    color: #fff;
+    padding: 7px 14px;
+    border-radius: 7px;
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+}
+
+.netflix-scan-chap-select:focus {
+    border-color: #e50914;
+}
+
+.netflix-scan-bar-page-info {
+    color: #94a3b8;
+    font-size: 12px;
+    font-weight: 600;
+    min-width: 80px;
+    text-align: center;
+}
+
+.netflix-scan-mode-btn {
+    background: rgba(229,9,20,0.18);
+    border-color: rgba(229,9,20,0.4);
+    color: #f87171;
+}
+
+.netflix-scan-mode-btn:hover {
+    background: rgba(229,9,20,0.3);
+    color: #fff;
+}

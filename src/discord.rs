@@ -53,18 +53,34 @@ pub fn init_discord_rpc() {
                         act = act.details(&details_text);
 
                         let mut state_parts = Vec::new();
-                        if let Some(s) = &payload.season {
-                            let s_clean = s.split('/').next().unwrap_or(s);
-                            let s_num = s_clean.replace(|c: char| !c.is_numeric(), "");
-                            if !s_num.is_empty() {
-                                state_parts.push(format!("Saison {}", s_num));
+                        let is_scan = payload
+                            .season
+                            .as_deref()
+                            .map(|s| s.to_lowercase().contains("scan"))
+                            .unwrap_or(false)
+                            || payload.status == "reading";
+
+                        if is_scan {
+                            if let Some(ep) = payload.episode {
+                                state_parts.push(format!("Scan • Chapitre {}", ep));
+                            } else {
+                                state_parts.push("Lecture de scans".to_string());
+                            }
+                        } else {
+                            if let Some(s) = &payload.season {
+                                let s_clean = s.split('/').next().unwrap_or(s);
+                                let s_num = s_clean.replace(|c: char| !c.is_numeric(), "");
+                                if !s_num.is_empty() {
+                                    state_parts.push(format!("Saison {}", s_num));
+                                }
+                            }
+                            if let Some(ep) = payload.episode {
+                                state_parts.push(format!("Épisode {}", ep));
                             }
                         }
-                        if let Some(ep) = payload.episode {
-                            state_parts.push(format!("Épisode {}", ep));
-                        }
+
                         let state_str = if state_parts.is_empty() {
-                            if payload.status == "playing" {
+                            if payload.status == "playing" || payload.status == "reading" {
                                 "En cours de lecture".to_string()
                             } else {
                                 "Parcourt le catalogue".to_string()
@@ -90,6 +106,8 @@ pub fn init_discord_rpc() {
                             assets = assets.small_image("play").small_text("En lecture");
                         } else if payload.status == "paused" {
                             assets = assets.small_image("pause").small_text("En pause");
+                        } else if is_scan || payload.status == "reading" {
+                            assets = assets.small_image("play").small_text("Lecture de scans");
                         }
                         act = act.assets(assets);
 
@@ -119,6 +137,22 @@ pub fn init_discord_rpc() {
                                     );
                                 }
                             }
+                        } else if is_scan || payload.status == "reading" {
+                            home_start_ts = None;
+                            let now_secs = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_secs();
+                            let start_ts = match cached_start_ts {
+                                Some(prev) => prev,
+                                None => {
+                                    cached_start_ts = Some(now_secs);
+                                    now_secs
+                                }
+                            };
+                            act = act.timestamps(
+                                activity::Timestamps::new().start(start_ts as i64),
+                            );
                         } else {
                             cached_start_ts = None;
                             if payload.status == "idle" || payload.title == "Page d'accueil" {

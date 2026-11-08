@@ -239,6 +239,13 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
             serve_image(req, &slug);
         }
 
+        ("GET", "/api/scan/img") => {
+            let oeuvre = query_params.get("oeuvre").cloned().unwrap_or_default();
+            let chapter = query_params.get("chapter").cloned().unwrap_or_default();
+            let page = query_params.get("page").cloned().unwrap_or_default();
+            serve_scan_image(req, &oeuvre, &chapter, &page);
+        }
+
         ("GET", "/api/auth/status") => {
             let verify = query_params.get("verify").map(|v| v == "1").unwrap_or(false);
             let logged_in = if verify {

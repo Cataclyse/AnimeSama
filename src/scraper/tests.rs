@@ -1,4 +1,4 @@
-use super::episodes::detect_hoster_brand;
+use super::episodes::{detect_hoster_brand, parse_scan_custom_names, url_encode};
 use regex::Regex;
 
 #[test]
@@ -34,4 +34,32 @@ fn test_extract_languages_regex() {
         langs2.push(cap[1].trim().to_lowercase());
     }
     assert_eq!(langs2, vec!["vostfr", "vf"]);
+}
+
+#[test]
+fn test_parse_scan_custom_names_and_encode() {
+    let html = r#"
+        resetListe();
+        creerListe(1, 2);newSP(2.5);
+        finirListe(3);
+    "#;
+    let names = parse_scan_custom_names(html, 4);
+    assert_eq!(names, vec![
+        "Chapitre 1".to_string(),
+        "Chapitre 2".to_string(),
+        "Chapitre 2.5".to_string(),
+        "Chapitre 3".to_string()
+    ]);
+
+    assert_eq!(url_encode("Kagura Bachi"), "Kagura%20Bachi");
+    assert_eq!(url_encode("Solo Leveling Side Story"), "Solo%20Leveling%20Side%20Story");
+}
+
+#[test]
+fn test_fetch_scan_episodes_kagura_bachi() {
+    if let Ok(ep) = super::episodes::fetch_scan_episodes("kagura-bachi", "scan/vf") {
+        assert!(ep.total_episodes >= 100);
+        assert_eq!(ep.scan_data.as_ref().unwrap().oeuvre, "Kagura Bachi");
+        assert!(ep.players.contains_key("Scans"));
+    }
 }

@@ -363,6 +363,29 @@
                 <div class="netflix-click-shield" id="netflixClickShield"></div>
             </div>
 
+            <div class="netflix-scan-viewport" id="netflixScanViewport" style="display: none;">
+                <div class="netflix-scan-scroll" id="netflixScanScroll">
+                    <div class="netflix-scan-pages" id="netflixScanPages"></div>
+                    <div class="netflix-scan-end" id="netflixScanEnd" style="display: none;">
+                        <div class="netflix-scan-end-card">
+                            <span class="netflix-scan-end-title" id="netflixScanEndTitle">Fin du chapitre</span>
+                            <button class="netflix-scan-next-btn" id="netflixScanNextBtn" onclick="nextScanChapter()">Chapitre suivant</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="netflix-scan-page-single" id="netflixScanPageSingle" style="display: none;">
+                    <button class="netflix-scan-arrow netflix-scan-arrow-left" id="netflixScanPrevPageBtn" onclick="prevScanPage()" title="Page précédente">
+                        <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                    </button>
+                    <div class="netflix-scan-single-wrap" id="netflixScanSingleWrap">
+                        <img id="netflixScanSingleImg" src="" alt="Page de scan" />
+                    </div>
+                    <button class="netflix-scan-arrow netflix-scan-arrow-right" id="netflixScanNextPageBtn" onclick="nextScanPage()" title="Page suivante">
+                        <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                    </button>
+                </div>
+            </div>
+
             <div class="netflix-center-pulse" id="netflixCenterPulse">
                 <div class="netflix-pulse-icon" id="netflixPulseIcon"></div>
             </div>
@@ -414,6 +437,10 @@
                     </div>
                 </div>
                 <div class="netflix-top-right">
+                    <button class="netflix-pill-btn netflix-scan-mode-btn" id="netflixScanModeBtn" style="display: none;" onclick="toggleScanReadingMode()">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                        <span id="netflixScanModeLabel">Défilement</span>
+                    </button>
                     <button class="netflix-pill-btn" id="netflixPillBtn" onclick="toggleAudioSubModal()">
                         <span id="netflixCurrentLang">VOSTFR</span>
                         <span class="netflix-pill-divider">•</span>
@@ -518,6 +545,23 @@
                             <svg class="icon-compress" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" style="display:none;"><polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="10" y1="14" x2="3" y2="21"></line></svg>
                         </button>
                     </div>
+                </div>
+            </div>
+
+            <div class="netflix-scan-bar" id="netflixScanBar" style="display: none;">
+                <div class="netflix-scan-bar-content">
+                    <button class="netflix-scan-bar-btn" id="netflixScanBarPrevBtn" onclick="prevScanChapter()" title="Chapitre précédent">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="4" x2="5" y2="20" stroke="currentColor" stroke-width="2.5"></line></svg>
+                        <span>Précédent</span>
+                    </button>
+                    <div class="netflix-scan-bar-info">
+                        <select class="netflix-scan-chap-select" id="netflixScanChapSelect" onchange="onScanChapSelectChange(this.value)"></select>
+                        <span class="netflix-scan-bar-page-info" id="netflixScanBarPageInfo">Page 1 / 1</span>
+                    </div>
+                    <button class="netflix-scan-bar-btn" id="netflixScanBarNextBtn" onclick="nextScanChapter()" title="Chapitre suivant">
+                        <span>Suivant</span>
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2.5"></line></svg>
+                    </button>
                 </div>
             </div>
 

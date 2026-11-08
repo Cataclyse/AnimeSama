@@ -3,6 +3,20 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScanChapter {
+    pub number: usize,
+    pub name: String,
+    pub pages: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScanData {
+    pub oeuvre: String,
+    pub total_chapters: usize,
+    pub chapters: Vec<ScanChapter>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SeasonEpisodes {
     pub slug: String,
     pub season: String,
@@ -10,12 +24,191 @@ pub struct SeasonEpisodes {
     pub players: HashMap<String, Vec<String>>,
     #[serde(default)]
     pub available_languages: Vec<String>,
+    #[serde(default)]
+    pub scan_data: Option<ScanData>,
+}
+
+pub fn url_encode(input: &str) -> String {
+    let mut encoded = String::with_capacity(input.len() * 3);
+    for byte in input.bytes() {
+        match byte {
+            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                encoded.push(byte as char);
+            }
+            b' ' => encoded.push_str("%20"),
+            _ => encoded.push_str(&format!("%{:02X}", byte)),
+        }
+    }
+    encoded
+}
+
+fn unescape_html(s: &str) -> String {
+    s.replace("&amp;", "&")
+        .replace("&#039;", "'")
+        .replace("&apos;", "'")
+        .replace("&quot;", "\"")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&#x27;", "'")
+        .replace("&#x2F;", "/")
+}
+
+pub fn parse_scan_custom_names(html: &str, total_keys: usize) -> Vec<String> {
+    let mut custom_names: Vec<String> = Vec::new();
+    if html.contains("resetListe") {
+        let cmd_re = Regex::new(r#"(creerListe\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)|newSP\s*\(\s*([^)]+)\s*\)|newSPF\s*\(\s*([^)]+)\s*\)|finirListe\s*\(\s*(\d+)\s*\))"#).unwrap();
+        let mut chap_retards: usize = 0;
+        for cap in cmd_re.captures_iter(html) {
+            let full_cmd = &cap[1];
+            if full_cmd.starts_with("creerListe") {
+                if let (Some(s_m), Some(e_m)) = (cap.get(2), cap.get(3)) {
+                    if let (Ok(s), Ok(e)) = (s_m.as_str().parse::<usize>(), e_m.as_str().parse::<usize>()) {
+                        for n in s..=e {
+                            custom_names.push(format!("Chapitre {}", n));
+                        }
+                    }
+                }
+            } else if full_cmd.starts_with("newSP(") {
+                if let Some(spe_m) = cap.get(4) {
+                    let spe = spe_m.as_str().trim().trim_matches(|c| c == '\'' || c == '"');
+                    custom_names.push(format!("Chapitre {}", spe));
+                    chap_retards += 1;
+                }
+            } else if full_cmd.starts_with("newSPF") {
+                if let Some(spe_m) = cap.get(5) {
+                    let spe = spe_m.as_str().trim().trim_matches(|c| c == '\'' || c == '"');
+                    custom_names.push(spe.to_string());
+                    chap_retards += 1;
+                }
+            } else if full_cmd.starts_with("finirListe") {
+                if let Some(s_m) = cap.get(6) {
+                    if let Ok(s) = s_m.as_str().parse::<usize>() {
+                        let end_val = total_keys.saturating_sub(chap_retards);
+                        if s <= end_val {
+                            for n in s..=end_val {
+                                custom_names.push(format!("Chapitre {}", n));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    custom_names
+}
+
+pub fn fetch_scan_episodes(slug: &str, season_path: &str) -> Result<SeasonEpisodes, String> {
+    let clean_slug = slug.trim().trim_matches('/');
+    let clean_season = season_path.trim().trim_matches('/');
+
+    let scan_page_url = format!("https://anime-sama.to/catalogue/{}/{}/", clean_slug, clean_season);
+    let resp = ureq::get(&scan_page_url)
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .set("Referer", &format!("https://anime-sama.to/catalogue/{}/", clean_slug))
+        .timeout(std::time::Duration::from_secs(8))
+        .call()
+        .map_err(|e| format!("Erreur réseau pour {}: {}", scan_page_url, e))?;
+
+    let html = resp.into_string().map_err(|e| format!("Erreur lecture page scan: {}", e))?;
+
+    let titre_re = Regex::new(r#"<h3[^>]*id=["']titreOeuvre["'][^>]*>(.*?)</h3>"#).unwrap();
+    let raw_titre = titre_re
+        .captures(&html)
+        .map(|c| c[1].trim().to_string())
+        .unwrap_or_else(|| clean_slug.replace('-', " "));
+    let titre_oeuvre = unescape_html(&raw_titre);
+
+    let mut langs = Vec::new();
+    let switch_re = Regex::new(r#"id=["']switch([A-Za-z0-9]+)["']"#).unwrap();
+    for cap in switch_re.captures_iter(&html) {
+        let l = cap[1].trim().to_lowercase();
+        if !l.is_empty() && !langs.contains(&l) {
+            langs.push(l);
+        }
+    }
+    if langs.is_empty() {
+        let parts: Vec<&str> = clean_season.split('/').collect();
+        if parts.len() > 1 {
+            langs.push(parts[1].to_lowercase());
+        } else {
+            langs.push("vf".to_string());
+        }
+    }
+
+    let encoded_oeuvre = url_encode(&titre_oeuvre);
+    let api_url = format!("https://anime-sama.to/s2/scans/get_nb_chap_et_img.php?oeuvre={}", encoded_oeuvre);
+    let api_resp = ureq::get(&api_url)
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .set("Referer", &scan_page_url)
+        .timeout(std::time::Duration::from_secs(8))
+        .call()
+        .map_err(|e| format!("Erreur réseau pour {}: {}", api_url, e))?;
+
+    let json_text = api_resp.into_string().map_err(|e| format!("Erreur lecture json scans: {}", e))?;
+    let data_oeuvre: HashMap<String, usize> = serde_json::from_str(&json_text)
+        .map_err(|e| format!("Erreur parsing json scans: {}", e))?;
+
+    let total_keys = data_oeuvre.len();
+    if total_keys == 0 {
+        return Err("Aucun chapitre disponible pour cette œuvre".to_string());
+    }
+
+    let custom_names = parse_scan_custom_names(&html, total_keys);
+
+    let total_chapters = if custom_names.is_empty() {
+        total_keys
+    } else {
+        custom_names.len()
+    };
+
+    let mut chapters = Vec::with_capacity(total_chapters);
+    let mut scan_urls = Vec::with_capacity(total_chapters);
+
+    for idx in 0..total_chapters {
+        let chap_num = idx + 1;
+        let pages = data_oeuvre.get(&chap_num.to_string()).copied().unwrap_or(0);
+        let name = if idx < custom_names.len() {
+            custom_names[idx].clone()
+        } else {
+            format!("Chapitre {}", chap_num)
+        };
+
+        scan_urls.push(format!(
+            "https://anime-sama.to/s2/scans/{}/{}/?pages={}",
+            encoded_oeuvre, chap_num, pages
+        ));
+
+        chapters.push(ScanChapter {
+            number: chap_num,
+            name,
+            pages,
+        });
+    }
+
+    let mut players = HashMap::new();
+    players.insert("Scans".to_string(), scan_urls);
+
+    Ok(SeasonEpisodes {
+        slug: clean_slug.to_string(),
+        season: clean_season.to_string(),
+        total_episodes: total_chapters,
+        players,
+        available_languages: langs,
+        scan_data: Some(ScanData {
+            oeuvre: titre_oeuvre,
+            total_chapters,
+            chapters,
+        }),
+    })
 }
 
 pub fn fetch_episodes(slug: &str, season_path: &str) -> Result<SeasonEpisodes, String> {
     let clean_slug = slug.trim().trim_matches('/');
     let mut clean_season = season_path.trim().trim_matches('/').to_string();
-    if !clean_season.contains('/') && !clean_season.to_lowercase().starts_with("scan") {
+    if clean_season.to_lowercase().contains("scan") {
+        return fetch_scan_episodes(clean_slug, &clean_season);
+    }
+    if !clean_season.contains('/') {
         clean_season = format!("{}/vostfr", clean_season);
     }
 
@@ -171,6 +364,7 @@ pub fn fetch_episodes(slug: &str, season_path: &str) -> Result<SeasonEpisodes, S
         total_episodes: max_eps,
         players,
         available_languages,
+        scan_data: None,
     };
 
     Ok(season_episodes)
