@@ -557,9 +557,9 @@
     background: rgba(0, 0, 0, 0.75);
     border: 1px solid rgba(255, 255, 255, 0.6);
     color: #fff;
-    padding: 10px 20px;
+    padding: 10px 18px;
     border-radius: 4px;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 700;
     cursor: pointer;
     display: flex;
@@ -570,11 +570,26 @@
     transition: all 0.2s cubic-bezier(0.2, 0, 0.2, 1);
 }
 
+.netflix-skip-intro-badge {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 3px;
+    letter-spacing: 0.5px;
+}
+
 .netflix-skip-intro-btn:hover {
     background: #fff;
     color: #000;
     border-color: #fff;
-    transform: scale(1.05);
+    transform: scale(1.04);
+}
+
+.netflix-skip-intro-btn:hover .netflix-skip-intro-badge {
+    background: rgba(0, 0, 0, 0.15);
+    color: #000;
 }
 
 .netflix-next-prompt {
@@ -744,14 +759,15 @@
 .netflix-episodes-drawer {
     position: absolute;
     bottom: 84px;
-    left: 36px;
     right: 36px;
+    width: 440px;
+    max-width: calc(100vw - 48px);
     background: rgba(18, 18, 18, 0.96);
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 8px;
-    padding: 20px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.9);
-    backdrop-filter: blur(14px);
+    padding: 16px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(16px);
     z-index: 25;
 }
 
@@ -759,76 +775,103 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .netflix-drawer-title-group {
     display: flex;
     align-items: baseline;
-    gap: 10px;
+    gap: 8px;
 }
 
 .netflix-drawer-season-title {
-    font-size: 17px;
-    font-weight: 800;
+    font-size: 14px;
+    font-weight: 700;
     color: #fff;
+    letter-spacing: 0.3px;
 }
 
 .netflix-drawer-count {
-    font-size: 13px;
-    color: var(--text-secondary);
+    font-size: 12px;
+    color: #888;
+}
+
+.netflix-close-sm {
+    background: transparent;
+    border: none;
+    color: #888;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: color 0.15s;
+    line-height: 1;
+}
+
+.netflix-close-sm:hover {
+    color: #fff;
 }
 
 .netflix-drawer-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-    gap: 12px;
-    max-height: 240px;
+    grid-template-columns: repeat(auto-fill, minmax(42px, 1fr));
+    gap: 8px;
+    max-height: 200px;
     overflow-y: auto;
-    padding-right: 6px;
+    padding-right: 4px;
 }
 
-.netflix-drawer-card {
-    background: #222;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 6px;
-    padding: 12px 10px;
+.netflix-drawer-chip {
+    height: 38px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 5px;
+    color: #d2d2d2;
     cursor: pointer;
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 6px;
-    text-align: center;
-    transition: all 0.15s ease;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    outline: none;
+    padding: 0;
 }
 
-.netflix-drawer-card:hover {
-    background: #333;
-    border-color: rgba(255, 255, 255, 0.3);
-    transform: translateY(-2px);
-}
-
-.netflix-drawer-card.active {
-    background: #2a0b0d;
-    border-color: var(--accent);
-    box-shadow: 0 0 12px rgba(229, 9, 20, 0.4);
-}
-
-.netflix-drawer-card-num {
-    font-size: 15px;
-    font-weight: 800;
+.netflix-drawer-chip:hover {
+    background: rgba(255, 255, 255, 0.18);
+    border-color: rgba(255, 255, 255, 0.25);
     color: #fff;
 }
 
-.netflix-drawer-card-status {
-    font-size: 11px;
-    color: var(--text-secondary);
-    font-weight: 500;
+.netflix-drawer-chip-num {
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
 }
 
-.netflix-drawer-card.active .netflix-drawer-card-status {
-    color: var(--accent);
-    font-weight: 700;
+.netflix-drawer-chip.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 800;
+    box-shadow: none;
+}
+
+.netflix-drawer-chip.seen:not(.active) {
+    color: #aaa;
+}
+
+.netflix-drawer-chip-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    background: var(--accent);
+    border-radius: 0 0 4px 4px;
+    pointer-events: none;
 }
 
 .netflix-drawer-empty {

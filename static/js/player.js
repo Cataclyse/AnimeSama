@@ -398,7 +398,7 @@ function toggleSpeedMenu() {
 function checkSkipIntro(currentTime) {
     const skipBtn = document.getElementById('netflixSkipIntroBtn');
     if (!skipBtn) return;
-    if (currentTime >= 5 && currentTime <= 85) {
+    if (currentTime >= 5 && currentTime <= 210) {
         skipBtn.style.display = 'flex';
     } else {
         skipBtn.style.display = 'none';
@@ -406,9 +406,10 @@ function checkSkipIntro(currentTime) {
 }
 
 function skipIntro() {
-    seekTo(88);
+    seekRelative(85);
     const skipBtn = document.getElementById('netflixSkipIntroBtn');
     if (skipBtn) skipBtn.style.display = 'none';
+    showToast('Intro passée (+85s)');
     resetIdleTimer();
 }
 
@@ -564,20 +565,20 @@ function renderEpisodeDrawer() {
         const isCurrent = i === State.currentEpIndex;
         const prog = getEpisodeProgress(slug, i + 1);
         const isSeen = prog && prog.duration > 0 && prog.currentTime >= prog.duration - 25;
-        const statusText = isCurrent ? 'En cours' : (isSeen ? 'Vu ✓' : `Épisode ${i + 1}`);
+        const pct = (prog && prog.duration > 0) ? Math.min(100, Math.round((prog.currentTime / prog.duration) * 100)) : (isSeen ? 100 : 0);
 
         return `
-            <div class="netflix-drawer-card ${isCurrent ? 'active' : ''}" onclick="selectEpisodeFromDrawer(${i})">
-                <div class="netflix-drawer-card-num">${i + 1}</div>
-                <div class="netflix-drawer-card-status">${statusText}</div>
-            </div>
+            <button class="netflix-drawer-chip ${isCurrent ? 'active' : ''} ${isSeen ? 'seen' : ''}" onclick="selectEpisodeFromDrawer(${i})" title="Épisode ${i + 1}${isCurrent ? ' (En cours)' : (isSeen ? ' (Vu)' : '')}">
+                <span class="netflix-drawer-chip-num">${i + 1}</span>
+                ${pct > 0 && !isCurrent ? `<span class="netflix-drawer-chip-bar" style="width: ${pct}%"></span>` : ''}
+            </button>
         `;
     }).join('');
 
     setTimeout(() => {
-        const activeCard = grid.querySelector('.netflix-drawer-card.active');
-        if (activeCard) {
-            activeCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const activeChip = grid.querySelector('.netflix-drawer-chip.active');
+        if (activeChip) {
+            activeChip.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
     }, 50);
 }
