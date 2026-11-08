@@ -24,6 +24,9 @@ function switchView(viewName) {
             document.getElementById('viewHome').classList.add('active');
             document.title = 'Anime-Sama — Page d\'accueil';
             if (typeof sendNavigationRpc === 'function') sendNavigationRpc('Page d\'accueil');
+            if (typeof renderHomeRows === 'function') renderHomeRows();
+            if (typeof renderContinueWatchingRow === 'function') renderContinueWatchingRow();
+            if (typeof runSync === 'function' && typeof State !== 'undefined' && State.loggedIn) runSync('auto');
             break;
         case 'animes':
             showCatalogueFiltered('Séries & Animes', 'Anime');

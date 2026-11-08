@@ -1282,6 +1282,7 @@ function closePlayerModal() {
     lastDiscordRpcCurrentTime = 0;
     lastDiscordRpcTimeRecordedAt = 0;
 
+    document.title = 'Anime-Sama — Page d\'accueil';
     sendNavigationRpc('Page d\'accueil');
     updateAppTitle(false);
 
@@ -1301,8 +1302,14 @@ function closePlayerModal() {
     document.body.style.overflow = 'auto';
     renderEpisodesGrid();
     updateModalPlayButton(State.currentAnime);
-    if (typeof renderHomeRows === 'function' && document.getElementById('viewHome') && document.getElementById('viewHome').classList.contains('active')) {
+    if (typeof renderHomeRows === 'function') {
         renderHomeRows();
+    }
+    if (typeof renderContinueWatchingRow === 'function') {
+        renderContinueWatchingRow();
+    }
+    if (typeof runSync === 'function' && typeof State !== 'undefined' && State.loggedIn) {
+        runSync('auto');
     }
 
     const audioModal = document.getElementById('netflixAudioSubModal');

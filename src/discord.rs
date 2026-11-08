@@ -43,9 +43,6 @@ pub fn init_discord_rpc() {
                 RpcCommand::Update(payload) => {
                     ensure_connected(&mut client, &mut last_connect_attempt);
                     if let Some(c) = client.as_mut() {
-                        if payload.status == "idle" {
-                            let _ = c.clear_activity();
-                        }
                         let mut act = activity::Activity::new();
                         let details_text = if payload.title.is_empty() {
                             "Page d'accueil".to_string()

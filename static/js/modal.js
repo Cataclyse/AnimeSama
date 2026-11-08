@@ -578,5 +578,14 @@ function closeDetailModal() {
         if (typeof sendNavigationRpc === 'function') {
             sendNavigationRpc('Page d\'accueil');
         }
+        if (typeof renderHomeRows === 'function') {
+            renderHomeRows();
+        }
+        if (typeof renderContinueWatchingRow === 'function') {
+            renderContinueWatchingRow();
+        }
+        if (typeof runSync === 'function' && typeof State !== 'undefined' && State.loggedIn) {
+            runSync('auto');
+        }
     }
 }
