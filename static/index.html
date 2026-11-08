@@ -20,88 +20,77 @@
 </head>
 <body>
     <div id="appUpdateOverlay" class="app-update-overlay" style="display: none;">
-        <div class="update-screen-container">
-            <div class="update-screen-header">
-                <div class="update-screen-brand">
-                    <img class="update-logo" src="https://anime-sama.to/img/opti/logo_banniere.webp" alt="Anime-Sama">
-                </div>
-                <div class="update-badge-pill" id="updateBadgePill" data-i18n="update.badge">Mise à jour disponible</div>
+        <div class="update-dialog">
+            <div class="update-dialog-header">
+                <img class="update-dialog-logo" src="https://anime-sama.to/img/opti/logo_banniere.webp" alt="Anime-Sama">
+                <span class="update-dialog-tag" id="updateBadgePill" data-i18n="update.badge">Mise à jour</span>
             </div>
 
-            <div class="update-screen-card">
-                <div class="update-hero-icon-wrap">
-                    <div class="update-icon-pulse"></div>
-                    <svg class="update-hero-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="7 10 12 15 17 10"></polyline>
-                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
+            <div class="update-dialog-body">
+                <div class="update-dialog-meta">
+                    <span class="update-dialog-title" id="updateScreenTitle" data-i18n="update.title">Mise à jour logicielle</span>
+                    <span class="update-dialog-versions" id="updateScreenSubtitle">v0.1.24 → v0.1.29</span>
                 </div>
 
-                <h1 class="update-screen-title" id="updateScreenTitle" data-i18n="update.title">Mise à jour en direct</h1>
-                <p class="update-screen-subtitle" id="updateScreenSubtitle" data-i18n="update.subtitle">Une nouvelle version d'Anime-Sama est en cours d'installation...</p>
-
-                <div class="update-steps-list">
-                    <div class="update-step-item" id="updateStepCheck">
-                        <div class="update-step-icon">
-                            <svg class="step-check-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
-                            <div class="step-spinner"></div>
-                        </div>
-                        <div class="update-step-details">
-                            <span class="update-step-name" data-i18n="update.step_check">1. Recherche de mise à jour</span>
-                            <span class="update-step-desc" id="updateStepCheckDesc" data-i18n="update.step_check_desc">Vérification de la dernière version</span>
-                        </div>
-                    </div>
-
-                    <div class="update-step-item" id="updateStepDownload">
-                        <div class="update-step-icon">
-                            <svg class="step-check-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
-                            <div class="step-spinner"></div>
-                        </div>
-                        <div class="update-step-details">
-                            <div class="update-step-header-row">
-                                <span class="update-step-name" data-i18n="update.step_download">2. Téléchargement des composants</span>
-                                <span class="update-step-value" id="updateStepDownloadValue">0%</span>
-                            </div>
-                            <span class="update-step-desc" id="updateStepDownloadDesc" data-i18n="update.step_download_desc">Téléchargement en cours...</span>
-                        </div>
-                    </div>
-
-                    <div class="update-step-item" id="updateStepInstall">
-                        <div class="update-step-icon">
-                            <svg class="step-check-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
-                            <div class="step-spinner"></div>
-                        </div>
-                        <div class="update-step-details">
-                            <span class="update-step-name" data-i18n="update.step_install">3. Remplacement & Installation</span>
-                            <span class="update-step-desc" id="updateStepInstallDesc" data-i18n="update.step_install_desc">En attente...</span>
-                        </div>
-                    </div>
-
-                    <div class="update-step-item" id="updateStepRestart">
-                        <div class="update-step-icon">
-                            <svg class="step-check-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
-                            <div class="step-spinner"></div>
-                        </div>
-                        <div class="update-step-details">
-                            <span class="update-step-name" data-i18n="update.step_restart">4. Redémarrage de l'application</span>
-                            <span class="update-step-desc" id="updateStepRestartDesc" data-i18n="update.step_restart_desc">En attente...</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="update-progress-section">
-                    <div class="update-progress-info">
-                        <span id="updateProgressText" data-i18n="update.preparing">Préparation...</span>
-                        <span id="updateProgressPercent">0%</span>
-                    </div>
-                    <div class="update-progress-track">
+                <div class="update-progress-wrap">
+                    <div class="update-progress-bar">
                         <div class="update-progress-fill" id="updateProgressBar" style="width: 0%;"></div>
                     </div>
+                    <div class="update-progress-labels">
+                        <span class="update-status-msg" id="updateProgressText" data-i18n="update.preparing">Préparation...</span>
+                        <span class="update-percent-msg" id="updateProgressPercent">0%</span>
+                    </div>
                 </div>
 
-                <div class="update-screen-actions">
-                    <button type="button" class="btn-update-bypass" id="updateBypassBtn" onclick="dismissUpdateOverlay()" data-i18n="update.bypass">Passer et accéder au catalogue</button>
+                <div class="update-steps">
+                    <div class="update-step" id="updateStepCheck">
+                        <span class="step-indicator">
+                            <span class="step-dot"></span>
+                            <span class="step-check">✓</span>
+                        </span>
+                        <div class="step-content">
+                            <span class="step-label" data-i18n="update.step_check">Vérification de la version</span>
+                            <span class="step-detail" id="updateStepCheckDesc" data-i18n="update.step_check_desc">Vérification de la dernière version</span>
+                        </div>
+                    </div>
+
+                    <div class="update-step" id="updateStepDownload">
+                        <span class="step-indicator">
+                            <span class="step-dot"></span>
+                            <span class="step-check">✓</span>
+                        </span>
+                        <div class="step-content">
+                            <span class="step-label" data-i18n="update.step_download">Téléchargement des composants</span>
+                            <span class="step-detail" id="updateStepDownloadDesc" data-i18n="update.step_download_desc">En attente...</span>
+                        </div>
+                        <span class="step-metric" id="updateStepDownloadValue">0%</span>
+                    </div>
+
+                    <div class="update-step" id="updateStepInstall">
+                        <span class="step-indicator">
+                            <span class="step-dot"></span>
+                            <span class="step-check">✓</span>
+                        </span>
+                        <div class="step-content">
+                            <span class="step-label" data-i18n="update.step_install">Remplacement & Installation</span>
+                            <span class="step-detail" id="updateStepInstallDesc" data-i18n="update.step_install_desc">En attente...</span>
+                        </div>
+                    </div>
+
+                    <div class="update-step" id="updateStepRestart">
+                        <span class="step-indicator">
+                            <span class="step-dot"></span>
+                            <span class="step-check">✓</span>
+                        </span>
+                        <div class="step-content">
+                            <span class="step-label" data-i18n="update.step_restart">Redémarrage de l'application</span>
+                            <span class="step-detail" id="updateStepRestartDesc" data-i18n="update.step_restart_desc">En attente...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="update-dialog-footer">
+                    <button type="button" class="btn-netflix-gray btn-update-skip" id="updateBypassBtn" onclick="dismissUpdateOverlay()" data-i18n="update.bypass">Ignorer</button>
                 </div>
             </div>
         </div>

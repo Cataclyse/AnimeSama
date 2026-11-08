@@ -337,9 +337,9 @@ function showUpdateOverlay(info) {
     if (!overlay) return;
     overlay.style.display = 'flex';
 
-    const badge = document.getElementById('updateBadgePill');
-    if (badge && info.current_version && info.latest_version) {
-        badge.textContent = `v${info.current_version} → ${info.latest_version}`;
+    const sub = document.getElementById('updateScreenSubtitle');
+    if (sub && info.current_version && info.latest_version) {
+        sub.textContent = `v${info.current_version} → ${info.latest_version}`;
     }
 
     const checkStep = document.getElementById('updateStepCheck');
@@ -461,8 +461,7 @@ function startUpdateStepTracking(targetVersion) {
                     if (progText) progText.textContent = t('update.ready', 'Mise à jour prête !');
                     if (bypassBtn) {
                         bypassBtn.textContent = t('update.enter_app', 'Entrer dans Anime-Sama');
-                        bypassBtn.style.color = '#46d369';
-                        bypassBtn.style.fontWeight = '700';
+                        bypassBtn.className = 'btn-netflix-primary btn-update-skip';
                     }
                     clearInterval(updatePollInterval);
                     updatePollInterval = null;
@@ -490,8 +489,8 @@ function startUpdateStepTracking(targetVersion) {
                     installDesc.style.color = '#ff4747';
                 }
                 if (bypassBtn) {
-                    bypassBtn.textContent = t('update.bypass', 'Passer et accéder au catalogue');
-                    bypassBtn.style.color = '#ffffff';
+                    bypassBtn.textContent = t('update.bypass', 'Ignorer');
+                    bypassBtn.className = 'btn-netflix-gray btn-update-skip';
                 }
             }
         } catch (e) {
