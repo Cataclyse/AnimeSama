@@ -59,8 +59,11 @@ pub fn select_asset<'a>(assets: &'a [serde_json::Value]) -> Option<(&'a str, &'a
         };
 
         if is_windows {
-            if name == "animesama.exe" {
+            if name == "animesama.exe" || name == "animesama-windows-x86_64.exe" {
                 return Some((name, download_url));
+            }
+            if name.ends_with(".exe") && name.to_lowercase().contains("setup") && candidate.is_none() {
+                candidate = Some((name, download_url));
             }
             if name.ends_with(".zip") && name.contains("windows") && candidate.is_none() {
                 candidate = Some((name, download_url));
@@ -69,10 +72,10 @@ pub fn select_asset<'a>(assets: &'a [serde_json::Value]) -> Option<(&'a str, &'a
             if name.ends_with(".deb") {
                 return Some((name, download_url));
             }
-            if name == "animesama-linux-gui" {
+            if name == "animesama-linux-gui" || name == "animesama-linux-gui-x86_64" {
                 return Some((name, download_url));
             }
-            if name == "animesama-linux-server" && candidate.is_none() {
+            if (name == "animesama-linux-server" || name == "animesama-linux-server-x86_64") && candidate.is_none() {
                 candidate = Some((name, download_url));
             }
             if name.ends_with(".tar.gz") && candidate.is_none() {
@@ -203,15 +206,15 @@ pub fn apply_update() -> Result<UpdateApplyResult, String> {
     let asset_name = update_info.asset_name.clone().unwrap_or_else(|| "update.bin".to_string());
     let bytes = download_file(download_url)?;
 
-    if asset_name.ends_with(".deb") {
+    if asset_name.ends_with(".deb") || (cfg!(target_os = "windows") && asset_name.to_lowercase().contains("setup")) {
         let temp_dir = std::env::temp_dir();
         let target = temp_dir.join(&asset_name);
-        fs::write(&target, &bytes).map_err(|e| format!("Échec d'écriture du paquet: {}", e))?;
+        fs::write(&target, &bytes).map_err(|e| format!("Échec d'écriture du fichier: {}", e))?;
         let _ = opener::open(&target);
         return Ok(UpdateApplyResult {
             success: true,
-            message: format!("Paquet {} téléchargé et ouvert dans l'installateur.", asset_name),
-            needs_restart: false,
+            message: format!("Fichier {} téléchargé et lancé.", asset_name),
+            needs_restart: true,
             downloaded_file: Some(target.to_string_lossy().to_string()),
         });
     }

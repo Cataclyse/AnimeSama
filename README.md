@@ -35,26 +35,29 @@ Precompiled binaries and packages are available on the [Releases](https://github
 
 ### Windows
 
-Download `animesama.exe` or `animesama-windows-x86_64.zip`, extract if needed, and run the executable.
+- **Setup Installer (Recommended)**: Download `AnimeSama-Setup-x86_64.exe` and follow the wizard. It configures desktop and start menu shortcuts with an uninstaller.
+- **Standalone Portable (Onefile)**: Download `animesama-windows-x86_64.exe` (or `animesama.exe`) and run directly with zero installation.
+- **Portable ZIP**: Download `animesama-windows-x86_64.zip` and extract anywhere.
 
 ### Linux (Debian / Ubuntu / Linux Mint)
 
-Download the `.deb` package and install it via `apt`:
+Download the `.deb` package (`animesama_*_amd64.deb`) and install it via `apt`:
 
 ```bash
-sudo apt install ./animesama_0.1.0_amd64.deb
+sudo apt install ./animesama_*_amd64.deb
 ```
 
 This installs the binary to `/usr/bin/animesama`, registers system dependencies (`libwebkit2gtk-4.1-0`, `libgtk-3-0`), and adds Anime-Sama to your desktop application menu with its official icon.
 
 ### Linux (Portable Standalone)
 
-- **Desktop GUI**: `animesama-linux-gui` (requires `libwebkit2gtk-4.1-0` and `libgtk-3-0`)
-- **Headless / Server**: `animesama-linux-server` (zero C/WebKitGTK dependencies, runs on any Linux distribution and serves the UI over HTTP)
+- **Desktop GUI (Onefile)**: `animesama-linux-gui-x86_64` (requires `libwebkit2gtk-4.1-0` and `libgtk-3-0`)
+- **Headless / Server (Onefile)**: `animesama-linux-server-x86_64` (zero C/WebKitGTK dependencies, runs on any Linux distribution and serves the UI over HTTP)
+- **Portable Tarball**: `animesama-linux-x86_64.tar.gz`
 
 ```bash
-chmod +x animesama-linux-gui
-./animesama-linux-gui
+chmod +x animesama-linux-gui-x86_64
+./animesama-linux-gui-x86_64
 ```
 
 ## Building from Source

@@ -11,11 +11,39 @@ permissions:
   contents: write
 
 jobs:
-  build-linux:
-    name: Build Linux
+  version:
+    name: Determine Version
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+      tag: ${{ steps.get_version.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
+      - id: get_version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            RAW_TAG="${GITHUB_REF#refs/tags/}"
+            VERSION="${RAW_TAG#v}"
+            TAG="$RAW_TAG"
+          else
+            VERSION="0.1.${{ github.run_number }}"
+            TAG="v${VERSION}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+
+  build-linux:
+    name: Build Linux
+    needs: [version]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update Cargo.toml version
+        run: |
+          sed -i 's/^version = .*/version = "'"$VERSION"'"/' Cargo.toml
 
       - name: Install system dependencies
         run: |
@@ -28,17 +56,19 @@ jobs:
       - name: Build GUI release binary
         run: |
           cargo build --release --features gui
-          cp target/release/animesama animesama-linux-gui
+          cp target/release/animesama animesama-linux-gui-x86_64
+          chmod +x animesama-linux-gui-x86_64
 
       - name: Build Server Universal release binary
         run: |
           cargo build --release --no-default-features
-          cp target/release/animesama animesama-linux-server
+          cp target/release/animesama animesama-linux-server-x86_64
+          chmod +x animesama-linux-server-x86_64
 
       - name: Package Debian Package
         run: |
           mkdir -p deb/DEBIAN deb/usr/bin deb/usr/share/applications deb/usr/share/metainfo deb/usr/share/icons/hicolor/256x256/apps
-          cp animesama-linux-gui deb/usr/bin/animesama
+          cp animesama-linux-gui-x86_64 deb/usr/bin/animesama
           chmod 755 deb/usr/bin/animesama
           cp assets/icon.png deb/usr/share/icons/hicolor/256x256/apps/animesama.png
 
@@ -69,15 +99,6 @@ jobs:
               <p>
                 Anime-Sama Desktop est une application native ultra-rapide écrite en Rust offrant une expérience cinématographique moderne inspirée de Netflix pour explorer, planifier et regarder l'intégralité du catalogue Anime-Sama sans publicités invasives.
               </p>
-              <p>Fonctionnalités principales :</p>
-              <ul>
-                <li>Hero Billboard dynamique avec séries en vedette et lecture de trailers au survol</li>
-                <li>Rails de catégories horizontaux avec navigation fluide (Tendances, Derniers ajouts, Classiques)</li>
-                <li>Lecteur cinéma intégré avec gestion des saisons, langues et épisodes</li>
-                <li>Ad Shield intégré bloquant activement les redirections et publicités indésirables</li>
-                <li>Système multilingue complet en 10 langues avec support des fichiers personnalisés</li>
-                <li>Sauvegarde locale sécurisée respectant les standards XDG</li>
-              </ul>
             </description>
             <launchable type="desktop-id">animesama.desktop</launchable>
             <url type="homepage">https://github.com/Cataclyse/AnimeSama</url>
@@ -93,9 +114,9 @@ jobs:
           EOF
           chmod 644 deb/usr/share/metainfo/animesama.metainfo.xml
 
-          cat << 'EOF' > deb/DEBIAN/control
+          cat << EOF > deb/DEBIAN/control
           Package: animesama
-          Version: 0.1.0
+          Version: ${VERSION}
           Section: video
           Priority: optional
           Architecture: amd64
@@ -106,74 +127,87 @@ jobs:
            Anime-Sama Desktop est une application native ultra-rapide écrite en Rust
            offrant une interface immersive inspirée de Netflix pour explorer, planifier
            et regarder l'intégralité du catalogue Anime-Sama sans publicités invasives.
-           .
-           Fonctionnalités :
-            * Catalogue complet en temps réel issu d'Anime-Sama
-            * Hero Billboard immersif avec bandes-annonces lues au survol
-            * Rails horizontaux Netflix (Tendances, Derniers ajouts, Classiques)
-            * Lecteur cinéma sans publicité avec choix des résolutions et lecteurs
-            * Ad Shield intégré filtrant les redirections et publicités intrusives
-            * 10 langues intégrées avec support des fichiers personnalisés (.lang)
-            * Faible consommation de mémoire vive (< 40 Mo de RAM)
           EOF
           chmod 644 deb/DEBIAN/control
 
-          dpkg-deb --build deb animesama_0.1.0_amd64.deb
+          dpkg-deb --build deb "animesama_${VERSION}_amd64.deb"
 
-      - name: Package Linux
+      - name: Package Linux Tarball
         run: |
-          mkdir -p dist-linux-gui dist-linux-server
-          cp animesama-linux-gui dist-linux-gui/animesama
-          cp -r static dist-linux-gui/
-          tar -czf animesama-linux-gui-x86_64.tar.gz -C dist-linux-gui .
-
-          cp animesama-linux-server dist-linux-server/animesama
-          cp -r static dist-linux-server/
-          tar -czf animesama-linux-server-x86_64.tar.gz -C dist-linux-server .
+          mkdir -p dist-linux
+          cp animesama-linux-gui-x86_64 dist-linux/animesama
+          cp assets/icon.png dist-linux/
+          tar -czf animesama-linux-x86_64.tar.gz -C dist-linux .
 
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
         with:
           name: animesama-linux
           path: |
-            animesama-linux-gui
-            animesama-linux-server
-            animesama_0.1.0_amd64.deb
-            animesama-linux-gui-x86_64.tar.gz
-            animesama-linux-server-x86_64.tar.gz
+            animesama-linux-gui-x86_64
+            animesama-linux-server-x86_64
+            animesama_*_amd64.deb
+            animesama-linux-x86_64.tar.gz
 
   build-windows:
     name: Build Windows
+    needs: [version]
     runs-on: windows-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Update Cargo.toml version
+        shell: pwsh
+        run: |
+          $content = Get-Content Cargo.toml -Raw
+          $newContent = $content -replace '(?m)^version = ".*?"', "version = `"$env:VERSION`""
+          Set-Content Cargo.toml -Value $newContent
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress
+
       - name: Build release binary
         run: cargo build --release
 
-      - name: Package Windows
+      - name: Build Inno Setup Installer
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path dist-windows
-          Copy-Item -Path target\release\animesama.exe -Destination dist-windows\
-          Copy-Item -Recurse -Path static -Destination dist-windows\
-          Compress-Archive -Path dist-windows\* -DestinationPath animesama-windows-x86_64.zip
+          $isccPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $isccPath)) {
+            $isccPath = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source
+          }
+          & $isccPath "/DMyAppVersion=$env:VERSION" installer.iss
+          Move-Item dist-installer\AnimeSama-Setup-x86_64.exe AnimeSama-Setup-x86_64.exe
+
+      - name: Package Windows Standalone
+        shell: pwsh
+        run: |
+          Copy-Item -Path target\release\animesama.exe -Destination animesama-windows-x86_64.exe
           Copy-Item -Path target\release\animesama.exe -Destination animesama.exe
+          New-Item -ItemType Directory -Force -Path dist-zip
+          Copy-Item -Path target\release\animesama.exe -Destination dist-zip\
+          Compress-Archive -Path dist-zip\* -DestinationPath animesama-windows-x86_64.zip
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: animesama-windows
           path: |
-            animesama-windows-x86_64.zip
+            AnimeSama-Setup-x86_64.exe
+            animesama-windows-x86_64.exe
             animesama.exe
+            animesama-windows-x86_64.zip
 
   release:
     name: Publish GitHub Release
-    needs: [build-linux, build-windows]
+    needs: [version, build-linux, build-windows]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     steps:
@@ -191,28 +225,45 @@ jobs:
           name: animesama-windows
           path: release-assets
 
-      - name: Determine tag name
-        id: tag_name
+      - name: Generate Checksums & Release Notes
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          else
-            echo "tag=latest" >> $GITHUB_OUTPUT
-          fi
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt
+          cat << 'EOF' > release_body.md
+          Anime-Sama Desktop Release
+          ==========================
+
+          Installation Files
+          ------------------
+
+          - **Windows Installer**: `AnimeSama-Setup-x86_64.exe`
+          - **Windows Standalone (Portable Onefile)**: `animesama-windows-x86_64.exe` (or `animesama.exe`)
+          - **Windows Portable ZIP**: `animesama-windows-x86_64.zip`
+          - **Debian / Ubuntu (.deb)**: `animesama_*_amd64.deb`
+          - **Linux GUI Standalone (Portable Onefile)**: `animesama-linux-gui-x86_64`
+          - **Linux Server Standalone (Headless)**: `animesama-linux-server-x86_64`
+          - **Linux Portable Tarball**: `animesama-linux-x86_64.tar.gz`
+
+          Checksums (SHA-256)
+          -------------------
+
+          | File | SHA-256 Checksum |
+          | :--- | :--- |
+          EOF
+
+          while read -r hash file; do
+            if [[ "$file" != "SHA256SUMS.txt" && "$file" != "release_body.md" ]]; then
+              echo "| \`$file\` | \`$hash\` |" >> release_body.md
+            fi
+          done < SHA256SUMS.txt
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.tag_name.outputs.tag }}
-          name: Anime-Sama Desktop (${{ steps.tag_name.outputs.tag }})
+          tag_name: ${{ needs.version.outputs.tag }}
+          name: Anime-Sama Desktop ${{ needs.version.outputs.tag }}
           draft: false
           prerelease: false
-          generate_release_notes: true
+          body_path: release-assets/release_body.md
           files: |
-            release-assets/animesama_0.1.0_amd64.deb
-            release-assets/animesama-linux-gui
-            release-assets/animesama-linux-server
-            release-assets/animesama-linux-gui-x86_64.tar.gz
-            release-assets/animesama-linux-server-x86_64.tar.gz
-            release-assets/animesama-windows-x86_64.zip
-            release-assets/animesama.exe
+            release-assets/*
