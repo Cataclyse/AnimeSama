@@ -21,6 +21,8 @@ pub struct UserData {
     pub auto_sync: bool,
     #[serde(default = "default_true")]
     pub ad_shield: bool,
+    #[serde(default = "default_true")]
+    pub auto_update: bool,
 }
 
 fn default_true() -> bool {
@@ -35,6 +37,7 @@ impl Default for UserData {
             history: Vec::new(),
             auto_sync: false,
             ad_shield: true,
+            auto_update: true,
         }
     }
 }
@@ -111,6 +114,15 @@ impl UserManager {
     pub fn set_ad_shield(&self, enabled: bool) -> UserData {
         let mut d = self.data.lock().unwrap();
         d.ad_shield = enabled;
+        let snapshot = d.clone();
+        drop(d);
+        self.save(&snapshot);
+        snapshot
+    }
+
+    pub fn set_auto_update(&self, enabled: bool) -> UserData {
+        let mut d = self.data.lock().unwrap();
+        d.auto_update = enabled;
         let snapshot = d.clone();
         drop(d);
         self.save(&snapshot);

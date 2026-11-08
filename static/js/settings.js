@@ -23,8 +23,9 @@ async function openAccountModal() {
     fetch('/api/settings')
         .then(r => r.json())
         .then(d => {
-            DOM.autoSyncCheckbox.checked = !!d.auto_sync;
-            DOM.adShieldCheckbox.checked = d.ad_shield !== false;
+            if (DOM.autoSyncCheckbox) DOM.autoSyncCheckbox.checked = !!d.auto_sync;
+            if (DOM.adShieldCheckbox) DOM.adShieldCheckbox.checked = d.ad_shield !== false;
+            if (DOM.autoUpdateCheckbox) DOM.autoUpdateCheckbox.checked = d.auto_update !== false;
             if (d.version) updateCurrentVersionDisplay(d.version);
         })
         .catch(() => {});
@@ -157,6 +158,21 @@ async function handleAdShieldToggle(e) {
         showToast(enabled ? t('settings.adshield_enabled', 'Ad Shield activé') : t('settings.adshield_disabled', 'Ad Shield désactivé'));
     } catch (err) {
         showToast('Impossible de sauvegarder ce réglage');
+        e.target.checked = !enabled;
+    }
+}
+
+async function handleAutoUpdateToggle(e) {
+    const enabled = e.target.checked;
+    try {
+        await fetch('/api/settings/auto-update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled })
+        });
+        showToast(enabled ? t('settings.autoupdate_enabled', 'Mise à jour automatique activée') : t('settings.autoupdate_disabled', 'Mise à jour automatique désactivée'));
+    } catch (err) {
+        showToast(t('settings.save_error', 'Impossible de sauvegarder ce réglage'));
         e.target.checked = !enabled;
     }
 }
@@ -294,13 +310,55 @@ async function applyUpdateDirect() {
     }
 }
 
+async function runAutoUpdateOnLaunch() {
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 12000);
+        const res = await fetch('/api/update/check', { signal: controller.signal });
+        clearTimeout(timeoutId);
+        const data = await res.json();
+        if (!res.ok || !data.update_available) return;
+
+        currentUpdateInfo = data;
+        const kindLabel = data.install_kind === 'windows_installer' ? ' (Installateur)'
+            : data.install_kind === 'windows_standalone' ? ' (Portable)'
+            : data.install_kind === 'linux_deb' ? ' (Paquet .deb)'
+            : data.install_kind === 'linux_gui_standalone' ? ' (Portable Linux)'
+            : '';
+
+        showToast(`🎉 ${t('settings.update_available', 'Nouvelle version')} ${data.latest_version}${kindLabel} détectée. Installation automatique...`);
+
+        const applyRes = await fetch('/api/update/apply', { method: 'POST' });
+        const applyData = await applyRes.json();
+        if (applyRes.ok && applyData.success) {
+            showToast(applyData.message || t('settings.update_success', 'Mise à jour réussie !'));
+            const desc = document.getElementById('updateStatusDesc');
+            if (desc) {
+                desc.textContent = applyData.message;
+                desc.style.color = '#46d369';
+            }
+        }
+    } catch (e) {
+    }
+}
+
+let appSettings = { auto_sync: false, ad_shield: true, auto_update: true };
+
 fetch('/api/settings')
     .then(r => r.json())
     .then(d => {
+        appSettings = d;
+        if (DOM.autoSyncCheckbox) DOM.autoSyncCheckbox.checked = !!d.auto_sync;
+        if (DOM.adShieldCheckbox) DOM.adShieldCheckbox.checked = d.ad_shield !== false;
+        if (DOM.autoUpdateCheckbox) DOM.autoUpdateCheckbox.checked = d.auto_update !== false;
         if (d.version) updateCurrentVersionDisplay(d.version);
     })
     .catch(() => {});
 
-setTimeout(() => {
-    checkForUpdates(true);
-}, 3000);
+setTimeout(async () => {
+    if (appSettings.auto_update !== false) {
+        await runAutoUpdateOnLaunch();
+    } else {
+        checkForUpdates(true);
+    }
+}, 2500);

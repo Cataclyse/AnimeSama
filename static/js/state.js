@@ -101,6 +101,7 @@ const DOM = {
     accountPseudo: document.getElementById('accountPseudo'),
     autoSyncCheckbox: document.getElementById('autoSyncCheckbox'),
     adShieldCheckbox: document.getElementById('adShieldCheckbox'),
+    autoUpdateCheckbox: document.getElementById('autoUpdateCheckbox'),
     syncAutoBtn: document.getElementById('syncAutoBtn'),
     syncStatus: document.getElementById('syncStatus'),
     accountLogoutBtn: document.getElementById('accountLogoutBtn'),

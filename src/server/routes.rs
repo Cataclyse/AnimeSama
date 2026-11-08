@@ -330,6 +330,7 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
             respond_json(req, &json!({
                 "auto_sync": data.auto_sync,
                 "ad_shield": data.ad_shield,
+                "auto_update": data.auto_update,
                 "version": crate::update::CURRENT_VERSION
             }).to_string());
         }
@@ -341,7 +342,7 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
             let enabled = parsed.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false);
 
             let data = state.user_mgr.set_auto_sync(enabled);
-            respond_json(req, &json!({ "auto_sync": data.auto_sync, "ad_shield": data.ad_shield }).to_string());
+            respond_json(req, &json!({ "auto_sync": data.auto_sync, "ad_shield": data.ad_shield, "auto_update": data.auto_update }).to_string());
         }
 
         ("POST", "/api/settings/ad-shield") => {
@@ -351,7 +352,17 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
             let enabled = parsed.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true);
 
             let data = state.user_mgr.set_ad_shield(enabled);
-            respond_json(req, &json!({ "auto_sync": data.auto_sync, "ad_shield": data.ad_shield }).to_string());
+            respond_json(req, &json!({ "auto_sync": data.auto_sync, "ad_shield": data.ad_shield, "auto_update": data.auto_update }).to_string());
+        }
+
+        ("POST", "/api/settings/auto-update") => {
+            let mut content = String::new();
+            let _ = req.as_reader().read_to_string(&mut content);
+            let parsed: serde_json::Value = serde_json::from_str(&content).unwrap_or_default();
+            let enabled = parsed.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true);
+
+            let data = state.user_mgr.set_auto_update(enabled);
+            respond_json(req, &json!({ "auto_sync": data.auto_sync, "ad_shield": data.ad_shield, "auto_update": data.auto_update }).to_string());
         }
 
         ("POST", "/api/sync/auto") => {

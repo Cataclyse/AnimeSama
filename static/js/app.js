@@ -94,6 +94,7 @@ function setupEventListeners() {
     DOM.syncAutoBtn.addEventListener('click', () => runSync('auto'));
     DOM.autoSyncCheckbox.addEventListener('change', handleAutoSyncToggle);
     DOM.adShieldCheckbox.addEventListener('change', handleAdShieldToggle);
+    if (DOM.autoUpdateCheckbox) DOM.autoUpdateCheckbox.addEventListener('change', handleAutoUpdateToggle);
 
     
     window.addEventListener('message', (event) => {
