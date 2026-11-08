@@ -1027,17 +1027,6 @@ async function togglePictureInPicture() {
 
         syncPlayerMediaMetadata();
 
-        if (v && v.requestPictureInPicture) {
-            try {
-                const doc = v.ownerDocument || document;
-                if (doc) doc.title = fullTitle;
-                v.title = fullTitle;
-            } catch (e) {}
-            await v.requestPictureInPicture();
-            resetIdleTimer();
-            return;
-        }
-
         if ('documentPictureInPicture' in window) {
             try {
                 const pipWindow = await window.documentPictureInPicture.requestWindow({
@@ -1046,23 +1035,27 @@ async function togglePictureInPicture() {
                 });
                 pipWindow.document.title = fullTitle;
 
-                const styleSheets = Array.from(document.styleSheets);
-                for (const sheet of styleSheets) {
-                    try {
-                        if (sheet.href) {
-                            const link = pipWindow.document.createElement('link');
-                            link.rel = 'stylesheet';
-                            link.href = sheet.href;
-                            pipWindow.document.head.appendChild(link);
-                        } else if (sheet.cssRules) {
-                            const style = pipWindow.document.createElement('style');
-                            for (const rule of sheet.cssRules) {
-                                style.appendChild(pipWindow.document.createTextNode(rule.cssText));
-                            }
-                            pipWindow.document.head.appendChild(style);
-                        }
-                    } catch (err) {}
-                }
+                const style = pipWindow.document.createElement('style');
+                style.textContent = `
+                    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+                    body { background: #000; overflow: hidden; width: 100vw; height: 100vh; position: relative; user-select: none; }
+                    .pip-viewport-wrapper { width: 100%; height: 100%; position: relative; }
+                    .pip-viewport-wrapper > * { width: 100% !important; height: 100% !important; }
+                    .pip-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between; padding: 12px 14px; background: linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 35%, transparent 65%, rgba(0,0,0,0.85) 100%); opacity: 0; transition: opacity 0.25s ease; z-index: 100; pointer-events: none; }
+                    body:hover .pip-overlay { opacity: 1; pointer-events: auto; }
+                    .pip-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+                    .pip-title-box { display: flex; flex-direction: column; overflow: hidden; }
+                    .pip-main-title { font-size: 13px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
+                    .pip-sub-title { font-size: 11px; color: #e50914; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.9); }
+                    .pip-controls { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px; }
+                    .pip-btn { background: rgba(255,255,255,0.15); border: none; color: #fff; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.15s, background 0.15s; }
+                    .pip-btn:hover { background: #e50914; transform: scale(1.1); }
+                    .pip-btn svg { width: 16px; height: 16px; fill: currentColor; }
+                    .pip-progress-wrap { flex: 1; height: 4px; background: rgba(255,255,255,0.3); border-radius: 2px; position: relative; cursor: pointer; }
+                    .pip-progress-bar { height: 100%; width: 0%; background: #e50914; border-radius: 2px; pointer-events: none; }
+                    .pip-time { font-size: 11px; color: #eee; font-weight: 600; min-width: 65px; text-align: right; }
+                `;
+                pipWindow.document.head.appendChild(style);
 
                 const viewport = document.getElementById('netflixVideoViewport');
                 if (viewport) {
@@ -1076,12 +1069,80 @@ async function togglePictureInPicture() {
                         viewport.parentNode.insertBefore(placeholder, viewport);
                     }
 
-                    pipWindow.document.body.style.margin = '0';
-                    pipWindow.document.body.style.background = '#000';
-                    pipWindow.document.body.style.overflow = 'hidden';
-                    pipWindow.document.body.appendChild(viewport);
+                    const wrap = pipWindow.document.createElement('div');
+                    wrap.className = 'pip-viewport-wrapper';
+                    wrap.appendChild(viewport);
+
+                    const overlay = pipWindow.document.createElement('div');
+                    overlay.className = 'pip-overlay';
+                    overlay.innerHTML = `
+                        <div class="pip-header">
+                            <div class="pip-title-box">
+                                <span class="pip-main-title">${escapeHtml(animeTitle || 'Anime-Sama')}</span>
+                                <span class="pip-sub-title">${escapeHtml(epTitle)}</span>
+                            </div>
+                        </div>
+                        <div class="pip-controls">
+                            <button class="pip-btn" id="pipBackBtn" title="-10s">
+                                <svg viewBox="0 0 24 24"><path d="M12.5 3a9.5 9.5 0 0 0-8.8 6H1l3.5 4.5L8 9H5.5A7.5 7.5 0 1 1 5 13.5H3a9.5 9.5 0 1 0 9.5-10.5z"/></svg>
+                            </button>
+                            <button class="pip-btn" id="pipPlayBtn" title="Play/Pause">
+                                <svg class="pip-icon-play" viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg>
+                                <svg class="pip-icon-pause" viewBox="0 0 24 24" style="display:none;"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+                            </button>
+                            <button class="pip-btn" id="pipFwdBtn" title="+10s">
+                                <svg viewBox="0 0 24 24"><path d="M11.5 3a9.5 9.5 0 0 1 8.8 6H23l-3.5 4.5L16 9h2.5A7.5 7.5 0 1 0 19 13.5h2a9.5 9.5 0 1 1-9.5-10.5z"/></svg>
+                            </button>
+                            <div class="pip-progress-wrap" id="pipProgressTrack">
+                                <div class="pip-progress-bar" id="pipProgressBar"></div>
+                            </div>
+                            <span class="pip-time" id="pipTime">00:00</span>
+                        </div>
+                    `;
+                    wrap.appendChild(overlay);
+                    pipWindow.document.body.appendChild(wrap);
+
+                    const pBtn = overlay.querySelector('#pipPlayBtn');
+                    const bBtn = overlay.querySelector('#pipBackBtn');
+                    const fBtn = overlay.querySelector('#pipFwdBtn');
+                    const pTrack = overlay.querySelector('#pipProgressTrack');
+                    const pBar = overlay.querySelector('#pipProgressBar');
+                    const pTime = overlay.querySelector('#pipTime');
+
+                    if (bBtn) bBtn.onclick = () => seekRelative(-10);
+                    if (fBtn) fBtn.onclick = () => seekRelative(10);
+                    if (pBtn) pBtn.onclick = () => togglePlayPause();
+
+                    if (pTrack) {
+                        pTrack.onclick = (e) => {
+                            const rect = pTrack.getBoundingClientRect();
+                            const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                            seekTo(pos * (playerState.duration || 0));
+                        };
+                    }
+
+                    const pipUpdateTimer = setInterval(() => {
+                        if (pipWindow.closed) {
+                            clearInterval(pipUpdateTimer);
+                            return;
+                        }
+                        const playIcon = overlay.querySelector('.pip-icon-play');
+                        const pauseIcon = overlay.querySelector('.pip-icon-pause');
+                        if (playIcon && pauseIcon) {
+                            playIcon.style.display = playerState.paused ? 'block' : 'none';
+                            pauseIcon.style.display = playerState.paused ? 'none' : 'block';
+                        }
+                        if (pBar && playerState.duration > 0) {
+                            const pct = Math.min(100, (playerState.currentTime / playerState.duration) * 100);
+                            pBar.style.width = `${pct}%`;
+                        }
+                        if (pTime) {
+                            pTime.textContent = formatPlayerTime(playerState.currentTime);
+                        }
+                    }, 300);
 
                     pipWindow.addEventListener('pagehide', () => {
+                        clearInterval(pipUpdateTimer);
                         const ph = document.getElementById('pipPlaceholder');
                         if (ph && ph.parentNode) {
                             ph.parentNode.insertBefore(viewport, ph);
@@ -1093,6 +1154,17 @@ async function togglePictureInPicture() {
                     return;
                 }
             } catch (err) {}
+        }
+
+        if (v && v.requestPictureInPicture) {
+            try {
+                const doc = v.ownerDocument || document;
+                if (doc) doc.title = fullTitle;
+                v.title = fullTitle;
+            } catch (e) {}
+            await v.requestPictureInPicture();
+            resetIdleTimer();
+            return;
         }
 
         sendFrameMessage({
