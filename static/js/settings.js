@@ -342,12 +342,18 @@ async function applyUpdateDirect() {
 
 async function runAutoUpdateOnLaunch() {
     try {
+        const modal = document.getElementById('playerModal');
+        if (modal && modal.classList.contains('open')) return;
+        if (typeof playerState !== 'undefined' && !playerState.paused) return;
+
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 12000);
         const res = await fetch('/api/update/check', { signal: controller.signal });
         clearTimeout(timeoutId);
         const data = await res.json();
         if (!res.ok || !data.update_available) return;
+
+        if (document.getElementById('playerModal') && document.getElementById('playerModal').classList.contains('open')) return;
 
         currentUpdateInfo = data;
         const applyRes = await fetch('/api/update/apply', { method: 'POST' });

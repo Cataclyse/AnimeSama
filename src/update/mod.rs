@@ -307,6 +307,15 @@ fn schedule_delayed_exit() {
 }
 
 pub fn apply_update() -> Result<UpdateApplyResult, String> {
+    if cfg!(debug_assertions) {
+        return Ok(UpdateApplyResult {
+            success: true,
+            message: "Mise à jour désactivée en mode développement.".to_string(),
+            needs_restart: false,
+            downloaded_file: None,
+        });
+    }
+
     let update_info = check_for_updates()?;
     if !update_info.update_available {
         return Ok(UpdateApplyResult {
@@ -355,20 +364,21 @@ pub fn apply_update() -> Result<UpdateApplyResult, String> {
         let setup_path = target.to_string_lossy().to_string();
         let app_path = current_exe_path.to_string_lossy().to_string();
 
+        let bat_path = temp_dir.join("animesama_install.bat");
+        let bat_content = format!(
+            "@echo off\r\nping 127.0.0.1 -n 2 >nul\r\nstart /wait \"\" \"{}\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART\r\nstart \"\" \"{}\"\r\ndel \"%~f0\"\r\n",
+            setup_path, app_path
+        );
+        let _ = fs::write(&bat_path, bat_content);
+
         #[cfg(target_os = "windows")]
         {
             use std::os::windows::process::CommandExt;
             const CREATE_NO_WINDOW: u32 = 0x08000000;
-            const DETACHED_PROCESS: u32 = 0x00000008;
-
-            let cmd_line = format!(
-                "ping 127.0.0.1 -n 2 > NUL & start /wait \"\" \"{}\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART & start \"\" \"{}\"",
-                setup_path, app_path
-            );
 
             std::process::Command::new("cmd")
-                .args(["/C", &cmd_line])
-                .creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS)
+                .args(["/C", &bat_path.to_string_lossy()])
+                .creation_flags(CREATE_NO_WINDOW)
                 .spawn()
                 .ok();
         }
@@ -421,22 +431,7 @@ pub fn apply_update() -> Result<UpdateApplyResult, String> {
 
         #[cfg(target_os = "windows")]
         {
-            use std::os::windows::process::CommandExt;
-            const CREATE_NO_WINDOW: u32 = 0x08000000;
-            const DETACHED_PROCESS: u32 = 0x00000008;
-
-            let app_path = current_exe.to_string_lossy().to_string();
-            let old_path = old_exe.to_string_lossy().to_string();
-            let cmd_line = format!(
-                "ping 127.0.0.1 -n 2 > NUL & del /f /q \"{}\" > NUL 2>&1 & start \"\" \"{}\"",
-                old_path, app_path
-            );
-
-            std::process::Command::new("cmd")
-                .args(["/C", &cmd_line])
-                .creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS)
-                .spawn()
-                .ok();
+            std::process::Command::new(&current_exe).spawn().ok();
         }
 
         schedule_delayed_exit();
