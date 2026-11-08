@@ -166,17 +166,17 @@ function getEpisodeProgress(slug, epNum, season) {
             const val = localStorage.getItem(`as_ep_progress_${slug}_${seasonBase}_${epNum}`);
             if (val) return JSON.parse(val);
         }
-        const general = localStorage.getItem(`as_ep_progress_${slug}_${epNum}`);
-        if (general) {
-            const parsed = JSON.parse(general);
-            if (!season || !parsed.season || parsed.season.split('/')[0].toLowerCase() === season.split('/')[0].toLowerCase()) {
-                return parsed;
-            }
-        }
         const animeProg = getPlaybackProgress(slug);
         if (animeProg && animeProg.episode === epNum) {
             if (!season || !animeProg.season || animeProg.season.split('/')[0].toLowerCase() === season.split('/')[0].toLowerCase()) {
                 return animeProg;
+            }
+        }
+        const general = localStorage.getItem(`as_ep_progress_${slug}_${epNum}`);
+        if (general) {
+            const parsed = JSON.parse(general);
+            if (season && parsed.season && parsed.season.split('/')[0].toLowerCase() === season.split('/')[0].toLowerCase()) {
+                return parsed;
             }
         }
         return null;

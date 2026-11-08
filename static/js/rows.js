@@ -284,7 +284,7 @@ function renderContinueWatchingRow() {
             }
         }
         if (!dur || dur <= 60) dur = 1440;
-        const pct = curTime > 5 ? Math.min(100, Math.round((curTime / dur) * 100)) : 30;
+        const pct = (curTime > 5) ? Math.min(100, Math.round((curTime / dur) * 100)) : 0;
         const timestamp = (savedProg && savedProg.timestamp) ? savedProg.timestamp : ((h.timestamp || 0) * 1000);
 
         const seasonBase = (season || 'saison1').split('/')[0];
@@ -326,6 +326,7 @@ function renderContinueWatchingRow() {
                                 }
                             }
                             if (!dur || dur <= 60) dur = 1440;
+                            const pct = (curTime > 5) ? Math.min(100, Math.round((curTime / dur) * 100)) : 0;
                             continueMap.set(slug, {
                                 slug: slug,
                                 title: savedProg.title || slug,
@@ -334,7 +335,7 @@ function renderContinueWatchingRow() {
                                 episode: ep,
                                 currentTime: curTime,
                                 duration: dur,
-                                progressPercent: curTime > 5 ? Math.min(100, Math.round((curTime / dur) * 100)) : 30,
+                                progressPercent: pct,
                                 timestamp: savedProg.timestamp || Date.now()
                             });
                         }
