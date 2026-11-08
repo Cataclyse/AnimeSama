@@ -36,6 +36,8 @@ fn load_window_icon() -> Option<tao::window::Icon> {
 }
 
 fn main() {
+    update::cleanup_old_executable();
+
     let args: Vec<String> = env::args().collect();
     let is_headless = args.iter().any(|a| a == "--headless" || a == "-s");
     let force_browser = args.iter().any(|a| a == "--browser" || a == "-b");
@@ -44,7 +46,7 @@ fn main() {
     println!("  ANIME-SAMA (RUST)");
     println!("==================================================");
 
-    let port = find_available_port(4567);
+    let port = find_available_port(48567);
     let app_url = format!("http://127.0.0.1:{}", port);
 
     let (_state, _server_thread) = server::start_server(port);

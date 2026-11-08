@@ -118,17 +118,12 @@ pub fn select_asset_for_kind<'a>(assets: &'a [serde_json::Value], kind: InstallK
         };
 
         match kind {
-            InstallKind::WindowsInstaller => {
-                if name.ends_with(".exe") && name.to_lowercase().contains("setup") {
-                    return Some((name, download_url));
-                }
-                if (name == "animesama.exe" || name == "animesama-windows-x86_64.exe") && candidate.is_none() {
-                    candidate = Some((name, download_url));
-                }
-            }
-            InstallKind::WindowsStandalone => {
+            InstallKind::WindowsInstaller | InstallKind::WindowsStandalone => {
                 if name == "animesama-windows-x86_64.exe" || name == "animesama.exe" {
                     return Some((name, download_url));
+                }
+                if name.ends_with(".exe") && name.to_lowercase().contains("setup") && candidate.is_none() {
+                    candidate = Some((name, download_url));
                 }
                 if name.ends_with(".zip") && name.contains("windows") && candidate.is_none() {
                     candidate = Some((name, download_url));
@@ -299,9 +294,23 @@ pub fn download_file(url: &str) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
+pub fn cleanup_old_executable() {
+    if let Ok(exe) = std::env::current_exe() {
+        let clean_exe = if let Some(stripped) = exe.to_str().and_then(|s| s.strip_prefix(r"\\?\")) {
+            std::path::PathBuf::from(stripped)
+        } else {
+            exe
+        };
+        let old = clean_exe.with_extension("exe.old");
+        if old.exists() {
+            let _ = fs::remove_file(old);
+        }
+    }
+}
+
 fn schedule_delayed_exit() {
     std::thread::spawn(|| {
-        std::thread::sleep(std::time::Duration::from_millis(600));
+        std::thread::sleep(std::time::Duration::from_millis(1200));
         std::process::exit(0);
     });
 }
@@ -360,27 +369,15 @@ pub fn apply_update() -> Result<UpdateApplyResult, String> {
         let target = temp_dir.join(&asset_name);
         fs::write(&target, &bytes).map_err(|e| format!("Échec d'écriture du fichier: {}", e))?;
 
-        let current_exe_path = std::env::current_exe().unwrap_or_else(|_| target.clone());
-        let setup_path = target.to_string_lossy().to_string();
-        let app_path = current_exe_path.to_string_lossy().to_string();
-
-        let bat_path = temp_dir.join("animesama_install.bat");
-        let bat_content = format!(
-            "@echo off\r\nping 127.0.0.1 -n 2 >nul\r\nstart /wait \"\" \"{}\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART\r\nstart \"\" \"{}\"\r\ndel \"%~f0\"\r\n",
-            setup_path, app_path
-        );
-        let _ = fs::write(&bat_path, bat_content);
-
         #[cfg(target_os = "windows")]
         {
             use std::os::windows::process::CommandExt;
             const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-            std::process::Command::new("cmd")
-                .args(["/C", &bat_path.to_string_lossy()])
+            let _ = std::process::Command::new(&target)
+                .args(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/FORCECLOSEAPPLICATIONS"])
                 .creation_flags(CREATE_NO_WINDOW)
-                .spawn()
-                .ok();
+                .spawn();
         }
 
         schedule_delayed_exit();
@@ -410,9 +407,14 @@ pub fn apply_update() -> Result<UpdateApplyResult, String> {
     };
 
     if cfg!(target_os = "windows") {
-        let old_exe = current_exe.with_extension("exe.old");
+        let clean_exe = if let Some(stripped) = current_exe.to_str().and_then(|s| s.strip_prefix(r"\\?\")) {
+            std::path::PathBuf::from(stripped)
+        } else {
+            current_exe.clone()
+        };
+        let old_exe = clean_exe.with_extension("exe.old");
         let _ = fs::remove_file(&old_exe);
-        if let Err(_e) = fs::rename(&current_exe, &old_exe) {
+        if let Err(_e) = fs::rename(&clean_exe, &old_exe) {
             let temp_dir = std::env::temp_dir();
             let target = temp_dir.join(&asset_name);
             fs::write(&target, &bytes).map_err(|err| format!("Échec d'écriture: {}", err))?;
@@ -424,14 +426,18 @@ pub fn apply_update() -> Result<UpdateApplyResult, String> {
                 downloaded_file: Some(target.to_string_lossy().to_string()),
             });
         }
-        if let Err(e) = fs::write(&current_exe, &bytes) {
-            let _ = fs::rename(&old_exe, &current_exe);
+        if let Err(e) = fs::write(&clean_exe, &bytes) {
+            let _ = fs::rename(&old_exe, &clean_exe);
             return Err(format!("Échec du remplacement de l'exécutable: {}", e));
         }
 
         #[cfg(target_os = "windows")]
         {
-            std::process::Command::new(&current_exe).spawn().ok();
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            let _ = std::process::Command::new(&clean_exe)
+                .creation_flags(CREATE_NO_WINDOW)
+                .spawn();
         }
 
         schedule_delayed_exit();
@@ -440,7 +446,7 @@ pub fn apply_update() -> Result<UpdateApplyResult, String> {
             success: true,
             message: format!("Mise à jour vers {} réussie ! Redémarrage de l'application...", update_info.latest_version),
             needs_restart: true,
-            downloaded_file: Some(current_exe.to_string_lossy().to_string()),
+            downloaded_file: Some(clean_exe.to_string_lossy().to_string()),
         })
     } else {
         let temp_exe = current_exe.with_extension("new");
@@ -501,10 +507,17 @@ mod tests {
         let arr = assets.as_array().unwrap();
 
         let win_inst = select_asset_for_kind(arr, InstallKind::WindowsInstaller).unwrap();
-        assert_eq!(win_inst.0, "AnimeSama-Setup-x86_64.exe");
+        assert_eq!(win_inst.0, "animesama-windows-x86_64.exe");
 
         let win_stand = select_asset_for_kind(arr, InstallKind::WindowsStandalone).unwrap();
         assert_eq!(win_stand.0, "animesama-windows-x86_64.exe");
+
+        let setup_only = serde_json::json!([
+            { "name": "AnimeSama-Setup-x86_64.exe", "browser_download_url": "https://example.com/setup.exe" }
+        ]);
+        let setup_arr = setup_only.as_array().unwrap();
+        let fallback_inst = select_asset_for_kind(setup_arr, InstallKind::WindowsInstaller).unwrap();
+        assert_eq!(fallback_inst.0, "AnimeSama-Setup-x86_64.exe");
 
         let lin_deb = select_asset_for_kind(arr, InstallKind::LinuxDeb).unwrap();
         assert_eq!(lin_deb.0, "animesama_0.1.0_amd64.deb");
