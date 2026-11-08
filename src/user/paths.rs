@@ -76,6 +76,25 @@ pub fn init_app_dirs() {
         let dest = dir.join(name);
         if !dest.exists() {
             let _ = fs::write(&dest, content);
+        } else if let Ok(existing) = fs::read_to_string(&dest) {
+            let mut merged = existing;
+            let mut changed = false;
+            for line in content.lines() {
+                if let Some(eq) = line.find('=') {
+                    let key = &line[..eq];
+                    if !merged.contains(key) {
+                        if !merged.ends_with('\n') {
+                            merged.push('\n');
+                        }
+                        merged.push_str(line);
+                        merged.push('\n');
+                        changed = true;
+                    }
+                }
+            }
+            if changed {
+                let _ = fs::write(&dest, &merged);
+            }
         }
     }
 

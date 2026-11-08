@@ -150,21 +150,16 @@ pub fn serve_static(req: tiny_http::Request, path: &str) -> bool {
         }
     }
     if let Some(sub) = clean.strip_prefix("lang/") {
-        let custom_path = crate::user::paths::lang_dir().join(sub);
-        if custom_path.exists() {
-            if let Ok(c) = fs::read_to_string(&custom_path) {
-                let resp = Response::from_string(c)
-                    .with_header(Header::from_bytes(&b"Content-Type"[..], &b"text/plain; charset=utf-8"[..]).unwrap())
-                    .with_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
-                let _ = req.respond(resp);
-                return true;
-            }
-        }
         let disk_path = format!("static/lang/{}", sub);
         let content = if Path::new(&disk_path).exists() {
             fs::read_to_string(&disk_path).ok()
         } else {
-            get_embedded_lang(sub).map(|s| s.to_string())
+            let custom_path = crate::user::paths::lang_dir().join(sub);
+            if custom_path.exists() {
+                fs::read_to_string(&custom_path).ok()
+            } else {
+                get_embedded_lang(sub).map(|s| s.to_string())
+            }
         };
         if let Some(c) = content {
             let resp = Response::from_string(c)

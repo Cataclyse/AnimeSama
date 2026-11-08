@@ -349,7 +349,7 @@ function showUpdateOverlay(info) {
         checkStep.classList.add('done');
     }
     if (checkDesc && info.latest_version) {
-        checkDesc.textContent = `Version ${info.latest_version} détectée`;
+        checkDesc.textContent = `${t('update.version_detected', 'Version détectée')} : ${info.latest_version}`;
     }
 
     const dlStep = document.getElementById('updateStepDownload');
@@ -361,7 +361,7 @@ function showUpdateOverlay(info) {
     const progBar = document.getElementById('updateProgressBar');
     if (progBar) progBar.style.width = '0%';
     const progText = document.getElementById('updateProgressText');
-    if (progText) progText.textContent = `Téléchargement de ${info.latest_version || 'la mise à jour'}...`;
+    if (progText) progText.textContent = `${t('update.downloading', 'Téléchargement de')} ${info.latest_version || ''}...`;
     const progPct = document.getElementById('updateProgressPercent');
     if (progPct) progPct.textContent = '0%';
 }
@@ -413,13 +413,13 @@ function startUpdateStepTracking(targetVersion) {
                     if (data.total_bytes > 0) {
                         dlDesc.textContent = `${formatUpdateBytes(data.bytes_downloaded)} / ${formatUpdateBytes(data.total_bytes)}`;
                     } else {
-                        dlDesc.textContent = data.message || 'Téléchargement en cours...';
+                        dlDesc.textContent = data.message || t('update.step_download_desc', 'Téléchargement en cours...');
                     }
                 }
                 if (dlVal) dlVal.textContent = `${data.percent}%`;
                 if (progPct) progPct.textContent = `${data.percent}%`;
                 if (progBar) progBar.style.width = `${data.percent}%`;
-                if (progText) progText.textContent = `Téléchargement de ${targetVersion || data.version || 'la mise à jour'}...`;
+                if (progText) progText.textContent = `${t('update.downloading', 'Téléchargement de')} ${targetVersion || data.version || ''}...`;
             } else if (data.step_index === 3) {
                 if (dlStep) {
                     dlStep.classList.remove('active');
@@ -435,11 +435,11 @@ function startUpdateStepTracking(targetVersion) {
                 }
 
                 if (installDesc) {
-                    installDesc.textContent = data.message || 'Remplacement des exécutables...';
+                    installDesc.textContent = data.message || t('update.installing', 'Installation et finalisation...');
                 }
                 if (progPct) progPct.textContent = '100%';
                 if (progBar) progBar.style.width = '100%';
-                if (progText) progText.textContent = 'Installation et finalisation...';
+                if (progText) progText.textContent = t('update.installing', 'Installation et finalisation...');
             } else if (data.step_index >= 4) {
                 if (dlStep) {
                     dlStep.classList.remove('active');
@@ -456,11 +456,11 @@ function startUpdateStepTracking(targetVersion) {
                         restartStep.classList.add('done');
                     }
                     if (restartDesc) {
-                        restartDesc.textContent = 'Mise à jour terminée avec succès !';
+                        restartDesc.textContent = t('update.ready', 'Mise à jour prête !');
                     }
-                    if (progText) progText.textContent = 'Mise à jour prête !';
+                    if (progText) progText.textContent = t('update.ready', 'Mise à jour prête !');
                     if (bypassBtn) {
-                        bypassBtn.textContent = 'Entrer dans Anime-Sama';
+                        bypassBtn.textContent = t('update.enter_app', 'Entrer dans Anime-Sama');
                         bypassBtn.style.color = '#46d369';
                         bypassBtn.style.fontWeight = '700';
                     }
@@ -472,9 +472,9 @@ function startUpdateStepTracking(targetVersion) {
                         restartStep.classList.remove('done');
                     }
                     if (restartDesc) {
-                        restartDesc.textContent = data.message || 'Redémarrage de l\'application...';
+                        restartDesc.textContent = data.message || t('update.restarting', 'Redémarrage imminent...');
                     }
-                    if (progText) progText.textContent = 'Redémarrage imminent...';
+                    if (progText) progText.textContent = t('update.restarting', 'Redémarrage imminent...');
                 }
             }
 
@@ -482,7 +482,7 @@ function startUpdateStepTracking(targetVersion) {
                 clearInterval(updatePollInterval);
                 updatePollInterval = null;
                 if (progText) {
-                    progText.textContent = 'Erreur lors de la mise à jour';
+                    progText.textContent = t('update.error', 'Erreur lors de la mise à jour');
                     progText.style.color = '#ff4747';
                 }
                 if (installDesc) {
@@ -490,7 +490,7 @@ function startUpdateStepTracking(targetVersion) {
                     installDesc.style.color = '#ff4747';
                 }
                 if (bypassBtn) {
-                    bypassBtn.textContent = 'Fermer et accéder au catalogue';
+                    bypassBtn.textContent = t('update.bypass', 'Passer et accéder au catalogue');
                     bypassBtn.style.color = '#ffffff';
                 }
             }

@@ -25,7 +25,7 @@
                 <div class="update-screen-brand">
                     <img class="update-logo" src="https://anime-sama.to/img/opti/logo_banniere.webp" alt="Anime-Sama">
                 </div>
-                <div class="update-badge-pill" id="updateBadgePill">Mise à jour disponible</div>
+                <div class="update-badge-pill" id="updateBadgePill" data-i18n="update.badge">Mise à jour disponible</div>
             </div>
 
             <div class="update-screen-card">
@@ -38,8 +38,8 @@
                     </svg>
                 </div>
 
-                <h1 class="update-screen-title" id="updateScreenTitle">Mise à jour en direct</h1>
-                <p class="update-screen-subtitle" id="updateScreenSubtitle">Une nouvelle version d'Anime-Sama est en cours d'installation...</p>
+                <h1 class="update-screen-title" id="updateScreenTitle" data-i18n="update.title">Mise à jour en direct</h1>
+                <p class="update-screen-subtitle" id="updateScreenSubtitle" data-i18n="update.subtitle">Une nouvelle version d'Anime-Sama est en cours d'installation...</p>
 
                 <div class="update-steps-list">
                     <div class="update-step-item" id="updateStepCheck">
@@ -48,8 +48,8 @@
                             <div class="step-spinner"></div>
                         </div>
                         <div class="update-step-details">
-                            <span class="update-step-name">1. Recherche de mise à jour</span>
-                            <span class="update-step-desc" id="updateStepCheckDesc">Vérification de la dernière version</span>
+                            <span class="update-step-name" data-i18n="update.step_check">1. Recherche de mise à jour</span>
+                            <span class="update-step-desc" id="updateStepCheckDesc" data-i18n="update.step_check_desc">Vérification de la dernière version</span>
                         </div>
                     </div>
 
@@ -60,10 +60,10 @@
                         </div>
                         <div class="update-step-details">
                             <div class="update-step-header-row">
-                                <span class="update-step-name">2. Téléchargement des composants</span>
+                                <span class="update-step-name" data-i18n="update.step_download">2. Téléchargement des composants</span>
                                 <span class="update-step-value" id="updateStepDownloadValue">0%</span>
                             </div>
-                            <span class="update-step-desc" id="updateStepDownloadDesc">Téléchargement en cours...</span>
+                            <span class="update-step-desc" id="updateStepDownloadDesc" data-i18n="update.step_download_desc">Téléchargement en cours...</span>
                         </div>
                     </div>
 
@@ -73,8 +73,8 @@
                             <div class="step-spinner"></div>
                         </div>
                         <div class="update-step-details">
-                            <span class="update-step-name">3. Remplacement & Installation</span>
-                            <span class="update-step-desc" id="updateStepInstallDesc">En attente...</span>
+                            <span class="update-step-name" data-i18n="update.step_install">3. Remplacement & Installation</span>
+                            <span class="update-step-desc" id="updateStepInstallDesc" data-i18n="update.step_install_desc">En attente...</span>
                         </div>
                     </div>
 
@@ -84,15 +84,15 @@
                             <div class="step-spinner"></div>
                         </div>
                         <div class="update-step-details">
-                            <span class="update-step-name">4. Redémarrage de l'application</span>
-                            <span class="update-step-desc" id="updateStepRestartDesc">En attente...</span>
+                            <span class="update-step-name" data-i18n="update.step_restart">4. Redémarrage de l'application</span>
+                            <span class="update-step-desc" id="updateStepRestartDesc" data-i18n="update.step_restart_desc">En attente...</span>
                         </div>
                     </div>
                 </div>
 
                 <div class="update-progress-section">
                     <div class="update-progress-info">
-                        <span id="updateProgressText">Préparation...</span>
+                        <span id="updateProgressText" data-i18n="update.preparing">Préparation...</span>
                         <span id="updateProgressPercent">0%</span>
                     </div>
                     <div class="update-progress-track">
@@ -101,7 +101,7 @@
                 </div>
 
                 <div class="update-screen-actions">
-                    <button type="button" class="btn-update-bypass" id="updateBypassBtn" onclick="dismissUpdateOverlay()">Passer et accéder au catalogue</button>
+                    <button type="button" class="btn-update-bypass" id="updateBypassBtn" onclick="dismissUpdateOverlay()" data-i18n="update.bypass">Passer et accéder au catalogue</button>
                 </div>
             </div>
         </div>
@@ -294,7 +294,7 @@
                     <div class="modal-actions">
                         <button class="btn btn-play" id="modalPlayBtn" onclick="handleModalMainPlay()">
                             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-                            <span id="modalPlayBtnText">Reprendre</span>
+                            <span id="modalPlayBtnText" data-i18n="hero.resume">Reprendre</span>
                         </button>
                         <button class="btn-circle btn-list" id="modalWatchlistBtn" title="Ajouter à ma liste">
                             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
