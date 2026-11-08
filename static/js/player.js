@@ -1020,6 +1020,17 @@ async function togglePictureInPicture() {
 
         syncPlayerMediaMetadata();
 
+        if (v && v.requestPictureInPicture) {
+            try {
+                const doc = v.ownerDocument || document;
+                if (doc) doc.title = fullTitle;
+                v.title = fullTitle;
+            } catch (e) {}
+            await v.requestPictureInPicture();
+            resetIdleTimer();
+            return;
+        }
+
         if ('documentPictureInPicture' in window) {
             try {
                 const pipWindow = await window.documentPictureInPicture.requestWindow({
@@ -1048,12 +1059,15 @@ async function togglePictureInPicture() {
 
                 const viewport = document.getElementById('netflixVideoViewport');
                 if (viewport) {
-                    const placeholder = document.createElement('div');
-                    placeholder.id = 'pipPlaceholder';
-                    placeholder.style.width = '100%';
-                    placeholder.style.height = '100%';
-                    placeholder.style.background = '#000';
-                    viewport.parentNode.insertBefore(placeholder, viewport);
+                    let placeholder = document.getElementById('pipPlaceholder');
+                    if (!placeholder) {
+                        placeholder = document.createElement('div');
+                        placeholder.id = 'pipPlaceholder';
+                        placeholder.style.width = '100%';
+                        placeholder.style.height = '100%';
+                        placeholder.style.background = '#000';
+                        viewport.parentNode.insertBefore(placeholder, viewport);
+                    }
 
                     pipWindow.document.body.style.margin = '0';
                     pipWindow.document.body.style.background = '#000';
@@ -1072,17 +1086,6 @@ async function togglePictureInPicture() {
                     return;
                 }
             } catch (err) {}
-        }
-
-        if (v && v.requestPictureInPicture) {
-            try {
-                const doc = v.ownerDocument || document;
-                if (doc) doc.title = fullTitle;
-                v.title = fullTitle;
-            } catch (e) {}
-            await v.requestPictureInPicture();
-            resetIdleTimer();
-            return;
         }
 
         sendFrameMessage({

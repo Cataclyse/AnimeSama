@@ -312,11 +312,20 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
         }} else if (d.type === 'AS_REQUEST_PIP') {{
             if (document.pictureInPictureElement) {{
                 try {{ document.exitPictureInPicture().catch(function() {{}}); }} catch(e) {{}}
-            }} else if (v && v.requestPictureInPicture) {{
-                try {{
-                    applyMediaMetadata(d.epTitle, d.animeTitle, d.poster);
-                    v.requestPictureInPicture().catch(function() {{}});
-                }} catch(e) {{}}
+            }} else {{
+                var targetVideo = v || document.querySelector('video');
+                if (targetVideo && targetVideo.requestPictureInPicture) {{
+                    try {{
+                        applyMediaMetadata(d.epTitle, d.animeTitle, d.poster);
+                        targetVideo.requestPictureInPicture().catch(function() {{}});
+                    }} catch(e) {{}}
+                }} else {{
+                    withHoster(function(p) {{
+                        try {{
+                            if (typeof p.setPip === 'function') p.setPip(true);
+                        }} catch(e) {{}}
+                    }});
+                }}
             }}
         }}
     }});"#,
