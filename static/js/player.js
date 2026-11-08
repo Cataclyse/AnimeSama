@@ -97,6 +97,8 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
         playerState.paused = false;
         playerState.nextPromptActive = false;
         playerState.skipData = null;
+        playerState.introSkipped = false;
+        playerState.endingSkipped = false;
 
         const animeTitle = State.currentAnime ? State.currentAnime.title : slug;
         loadSkipTimes(animeTitle, episodeIndex + 1);
@@ -249,18 +251,21 @@ function updatePlayPauseButton(isPlaying) {
 
 function togglePlayPause() {
     const v = getIframeVideo();
+    let willPlay = false;
     if (v) {
         if (v.paused) {
             v.play().catch(() => {});
-            showCenterPulse('play');
+            willPlay = true;
         } else {
             v.pause();
-            showCenterPulse('pause');
+            willPlay = false;
         }
     } else {
-        sendFrameMessage({ type: 'AS_TOGGLE_PLAY' });
-        showCenterPulse(playerState.paused ? 'play' : 'pause');
+        willPlay = playerState.paused;
     }
+
+    sendFrameMessage({ type: 'AS_TOGGLE_PLAY' });
+    showCenterPulse(willPlay ? 'play' : 'pause');
     resetIdleTimer();
 }
 
@@ -422,7 +427,7 @@ function checkSkipIntro(currentTime) {
         const op = playerState.skipData.op;
         const ed = playerState.skipData.ed;
 
-        if (op && currentTime >= op.start - 0.5 && currentTime < op.end) {
+        if (op && !playerState.introSkipped && currentTime >= op.start - 0.5 && currentTime < op.end) {
             skipBtn.style.display = 'flex';
             skipBtn.dataset.skipTarget = op.end;
             skipBtn.dataset.skipType = 'op';
@@ -433,7 +438,7 @@ function checkSkipIntro(currentTime) {
             return;
         }
 
-        if (ed && currentTime >= ed.start - 0.5 && currentTime < ed.end) {
+        if (ed && !playerState.endingSkipped && currentTime >= ed.start - 0.5 && currentTime < ed.end) {
             skipBtn.style.display = 'flex';
             skipBtn.dataset.skipTarget = ed.end;
             skipBtn.dataset.skipType = 'ed';
@@ -443,9 +448,12 @@ function checkSkipIntro(currentTime) {
             if (badgeEl) badgeEl.textContent = 'Auto';
             return;
         }
+
+        skipBtn.style.display = 'none';
+        return;
     }
 
-    if (currentTime >= 5 && currentTime <= 210) {
+    if (!playerState.introSkipped && currentTime >= 5 && currentTime <= 210) {
         skipBtn.style.display = 'flex';
         skipBtn.dataset.skipTarget = 'relative_85';
         skipBtn.dataset.skipType = 'fallback';
@@ -461,12 +469,19 @@ function checkSkipIntro(currentTime) {
 function skipIntro() {
     const skipBtn = document.getElementById('netflixSkipIntroBtn');
     const target = skipBtn ? skipBtn.dataset.skipTarget : null;
+    const type = skipBtn ? skipBtn.dataset.skipType : null;
+
+    if (type === 'ed') {
+        playerState.endingSkipped = true;
+    } else {
+        playerState.introSkipped = true;
+    }
 
     if (target && target !== 'relative_85') {
         const num = parseFloat(target);
         if (!isNaN(num) && num > 0) {
             seekTo(num + 0.2);
-            showToast("Générique passé (précision API)");
+            showToast(type === 'ed' ? "Générique de fin passé (précision API)" : "Intro passée (précision API)");
         } else {
             seekRelative(85);
             showToast("Intro passée (+85s)");

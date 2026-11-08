@@ -32,14 +32,24 @@ iframe {{
 
 .jw-controlbar, .jw-controls, .jw-controls-backdrop, .jw-display-icon-container,
 .jw-display-icon-display, .jw-icon-display, .jw-svg-icon, .jw-preview,
+.jw-pause-overlay, .jw-overlays, .jw-overlay, .jw-display, .jw-dock, .jw-dock-btn,
+.jw-related, .jw-nextup, .jw-card, .jw-rightclick, .jw-flag-paused .jw-overlays,
+.jw-flag-paused .jw-display, .jw-flag-paused [class*="download" i],
 .vjs-control-bar, .vjs-big-play-button, .vjs-loading-spinner, .vjs-poster,
-.plyr__controls, .clappr-controls, .fp-ui, .control-bar, .mejs__controls,
+.plyr__controls, .plyr__control--overlaid, .plyr__poster, .plyr__captions, .plyr__badge,
+.plyr--paused .plyr__control--overlaid, .voe-title, .voe-watermark,
+[class*="watermark" i], div[class*="play-wrapper" i], div[id*="play-wrapper" i],
+div[class*="loading-overlay" i], div[class*="center-icon" i],
+.btn-play, .play-button, .overlay-play, .clappr-controls, .fp-ui, .control-bar, .mejs__controls,
 #controls, .controls, [class*="controlbar" i], [class*="player-controls" i],
-.vjs-text-track-display, .jw-title {{
+.vjs-text-track-display, .jw-title, [class*="download" i], [id*="download" i],
+a[href*="download" i], a[download], button[class*="download" i], .vidmoly-download, div[class*="moly" i] {{
     display: none !important;
     opacity: 0 !important;
     visibility: hidden !important;
     pointer-events: none !important;
+    width: 0 !important;
+    height: 0 !important;
 }}
 
 video, .jw-media, .jw-video {{
@@ -599,6 +609,16 @@ div[class*="cf-turnstile" i] {{
                 }} catch(e) {{}}
             }}
 
+            var residues = document.querySelectorAll(
+                '.jw-pause-overlay, .jw-overlays, .jw-related, .jw-dock, .jw-nextup, ' +
+                '[class*="download" i], [id*="download" i], a[href*="download" i], a[download], button[class*="download" i], ' +
+                '.plyr__control--overlaid, .plyr__controls, .plyr__poster, [class*="watermark" i], .voe-title, .voe-watermark'
+            );
+            for (var r = 0; r < residues.length; r++) {{
+                if (isProtectedPlayerElement(residues[r])) continue;
+                try {{ residues[r].remove(); }} catch(e) {{}}
+            }}
+
             
             runOverlayBuster();
         }} catch(e) {{}}
@@ -803,18 +823,60 @@ div[class*="cf-turnstile" i] {{
     }}, 300);
     setTimeout(function() {{ clearInterval(videoPoll); }}, 60000);
 
-    function togglePlay() {{
+    function triggerHosterPlay() {{
+        try {{
+            if (window.player && typeof window.player.play === 'function') {{
+                window.player.play();
+            }}
+        }} catch(e) {{}}
+        try {{
+            if (window.jwplayer && typeof window.jwplayer === 'function') {{
+                var jwp = window.jwplayer();
+                if (jwp && typeof jwp.play === 'function') jwp.play();
+            }}
+        }} catch(e) {{}}
+        try {{
+            var playBtns = document.querySelectorAll(
+                '.plyr__control--overlaid, button[data-plyr="play"], .play-wrapper, .play-button, .btn-play, .overlay-play, .vjs-big-play-button, .jw-display-icon-display, [aria-label="Play"]'
+            );
+            for (var b = 0; b < playBtns.length; b++) {{
+                playBtns[b].click();
+            }}
+        }} catch(e) {{}}
         try {{
             var v = document.querySelector('video');
-            if (v) {{
-                if (v.paused) {{
-                    var p = v.play();
-                    if (p && typeof p.catch === 'function') p.catch(function(){{}});
-                }} else {{
-                    v.pause();
-                }}
+            if (v && v.paused) {{
+                var p = v.play();
+                if (p && typeof p.catch === 'function') p.catch(function(){{}});
             }}
-        }} catch(err) {{}}
+        }} catch(e) {{}}
+    }}
+
+    function triggerHosterPause() {{
+        try {{
+            var v = document.querySelector('video');
+            if (v) v.pause();
+        }} catch(e) {{}}
+        try {{
+            if (window.player && typeof window.player.pause === 'function') {{
+                window.player.pause();
+            }}
+        }} catch(e) {{}}
+        try {{
+            if (window.jwplayer && typeof window.jwplayer === 'function') {{
+                var jwp = window.jwplayer();
+                if (jwp && typeof jwp.pause === 'function') jwp.pause();
+            }}
+        }} catch(e) {{}}
+    }}
+
+    function togglePlay() {{
+        var v = document.querySelector('video');
+        if (v && !v.paused) {{
+            triggerHosterPause();
+        }} else {{
+            triggerHosterPlay();
+        }}
     }}
 
     
@@ -853,9 +915,9 @@ div[class*="cf-turnstile" i] {{
         }} else if (ev.data.type === 'AS_TOGGLE_PLAY') {{
             togglePlay();
         }} else if (ev.data.type === 'AS_PLAY') {{
-            if (v) {{ try {{ v.play().catch(function(){{}}); }} catch(err) {{}} }}
+            triggerHosterPlay();
         }} else if (ev.data.type === 'AS_PAUSE') {{
-            if (v) {{ try {{ v.pause(); }} catch(err) {{}} }}
+            triggerHosterPause();
         }} else if (ev.data.type === 'AS_SEEK_RELATIVE') {{
             var delta = parseFloat(ev.data.delta) || 0;
             if (v && !isNaN(v.currentTime)) {{
@@ -1027,18 +1089,60 @@ pub fn generate_resume_only_script(resume_seconds: f64, episode_num: u32) -> Str
     }}, 300);
     setTimeout(function() {{ clearInterval(videoPoll); }}, 60000);
 
-    function togglePlay() {{
+    function triggerHosterPlay() {{
+        try {{
+            if (window.player && typeof window.player.play === 'function') {{
+                window.player.play();
+            }}
+        }} catch(e) {{}}
+        try {{
+            if (window.jwplayer && typeof window.jwplayer === 'function') {{
+                var jwp = window.jwplayer();
+                if (jwp && typeof jwp.play === 'function') jwp.play();
+            }}
+        }} catch(e) {{}}
+        try {{
+            var playBtns = document.querySelectorAll(
+                '.plyr__control--overlaid, button[data-plyr="play"], .play-wrapper, .play-button, .btn-play, .overlay-play, .vjs-big-play-button, .jw-display-icon-display, [aria-label="Play"]'
+            );
+            for (var b = 0; b < playBtns.length; b++) {{
+                playBtns[b].click();
+            }}
+        }} catch(e) {{}}
         try {{
             var v = document.querySelector('video');
-            if (v) {{
-                if (v.paused) {{
-                    var p = v.play();
-                    if (p && typeof p.catch === 'function') p.catch(function(){{}});
-                }} else {{
-                    v.pause();
-                }}
+            if (v && v.paused) {{
+                var p = v.play();
+                if (p && typeof p.catch === 'function') p.catch(function(){{}});
             }}
-        }} catch(err) {{}}
+        }} catch(e) {{}}
+    }}
+
+    function triggerHosterPause() {{
+        try {{
+            var v = document.querySelector('video');
+            if (v) v.pause();
+        }} catch(e) {{}}
+        try {{
+            if (window.player && typeof window.player.pause === 'function') {{
+                window.player.pause();
+            }}
+        }} catch(e) {{}}
+        try {{
+            if (window.jwplayer && typeof window.jwplayer === 'function') {{
+                var jwp = window.jwplayer();
+                if (jwp && typeof jwp.pause === 'function') jwp.pause();
+            }}
+        }} catch(e) {{}}
+    }}
+
+    function togglePlay() {{
+        var v = document.querySelector('video');
+        if (v && !v.paused) {{
+            triggerHosterPause();
+        }} else {{
+            triggerHosterPlay();
+        }}
     }}
 
     
@@ -1077,9 +1181,9 @@ pub fn generate_resume_only_script(resume_seconds: f64, episode_num: u32) -> Str
         }} else if (ev.data.type === 'AS_TOGGLE_PLAY') {{
             togglePlay();
         }} else if (ev.data.type === 'AS_PLAY') {{
-            if (v) {{ try {{ v.play().catch(function(){{}}); }} catch(err) {{}} }}
+            triggerHosterPlay();
         }} else if (ev.data.type === 'AS_PAUSE') {{
-            if (v) {{ try {{ v.pause(); }} catch(err) {{}} }}
+            triggerHosterPause();
         }} else if (ev.data.type === 'AS_SEEK_RELATIVE') {{
             var delta = parseFloat(ev.data.delta) || 0;
             if (v && !isNaN(v.currentTime)) {{
