@@ -17,6 +17,8 @@ A fast, lightweight native desktop application written in Rust that provides a N
 
 Real-world resource metrics measured during active 1080p video playback on Windows:
 
+![Windows Task Manager Resource Usage](assets/benchmark_taskmgr.png)
+
 | Metric | Measured Usage | Details |
 | :--- | :--- | :--- |
 | **CPU** | **~0.9%** | Event-driven playback, debounced DOM sanitizer, zero active polling loops |
