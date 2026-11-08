@@ -130,9 +130,13 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
         if (v._asHooked) return;
         v._asHooked = true;
         v._asSeekCompleted = (resumeTarget <= 2);
+        var lastSeekTime = 0;
 
         function attemptSeek() {{
             if (v._asSeekCompleted || resumeTarget <= 2) return;
+            var now = Date.now();
+            if (now - lastSeekTime < 1000) return;
+            lastSeekTime = now;
             try {{
                 withHoster(function(p) {{
                     try {{
@@ -163,7 +167,7 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
         v.addEventListener('ended', function() {{ notify('AS_ENDED'); report(v, true); }}, {{ passive: true }});
 
         v.addEventListener('seeked', function() {{
-            if (resumeTarget > 2 && v.currentTime >= resumeTarget - 3) v._asSeekCompleted = true;
+            if (resumeTarget > 2 && Math.abs(v.currentTime - resumeTarget) < 5) v._asSeekCompleted = true;
             report(v, true);
         }}, {{ passive: true }});
 

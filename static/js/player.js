@@ -49,18 +49,6 @@ function sendFrameMessage(msg) {
     } catch (e) {}
 }
 
-const PREFERRED_PLAYERS = ['Uqload', 'VOE', 'VidMoly', 'Sibnet', 'Sendvid', 'Earnvids', 'DoodStream', 'StreamTape', 'OneUpload', 'FileMoon'];
-
-function pickBestPlayer(players, current) {
-    if (!players || !players.length) return null;
-    if (current && players.includes(current)) return current;
-    for (const pref of PREFERRED_PLAYERS) {
-        const found = players.find(p => p.toLowerCase().includes(pref.toLowerCase()));
-        if (found) return found;
-    }
-    return players[0];
-}
-
 function updateAppTitle(isPlaying) {
     if (isPlaying && State.currentAnime) {
         const title = State.currentAnime.title || State.currentAnime.slug;
@@ -211,19 +199,18 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
                 if (resumeSeconds > 5) {
                     sendFrameMessage({ type: 'AS_SEEK_TO', time: resumeSeconds });
                 }
-                const seekDelays = [200, 500, 900, 1500, 2500, 4000];
-                seekDelays.forEach(delay => {
-                    setTimeout(() => {
-                        sendFrameMessage({ type: 'AS_PLAY' });
-                        if (State.targetResumeTime > 5) {
-                            sendFrameMessage({ type: 'AS_SEEK_TO', time: State.targetResumeTime });
-                            const v = getIframeVideo();
-                            if (v && v.currentTime < State.targetResumeTime - 2) {
-                                try { v.currentTime = State.targetResumeTime; } catch (e) {}
-                            }
-                        }
-                    }, delay);
-                });
+                setTimeout(() => {
+                    sendFrameMessage({ type: 'AS_PLAY' });
+                    if (State.targetResumeTime > 5) {
+                        sendFrameMessage({ type: 'AS_SEEK_TO', time: State.targetResumeTime });
+                    }
+                }, 800);
+                setTimeout(() => {
+                    sendFrameMessage({ type: 'AS_PLAY' });
+                    if (State.targetResumeTime > 5) {
+                        sendFrameMessage({ type: 'AS_SEEK_TO', time: State.targetResumeTime });
+                    }
+                }, 2000);
             };
             iframe.src = proxyUrl;
         }
@@ -332,9 +319,6 @@ function updateFromVideoElement(v) {
 
     if (State.targetResumeTime && State.targetResumeTime > 5) {
         if (v.currentTime < State.targetResumeTime - 2) {
-            try {
-                v.currentTime = State.targetResumeTime;
-            } catch (e) {}
             return;
         } else {
             State.targetResumeTime = 0;

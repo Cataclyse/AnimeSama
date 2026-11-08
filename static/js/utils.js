@@ -24,3 +24,15 @@ function escapeHtml(str) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
 }
+
+const PREFERRED_PLAYERS = ['Uqload', 'VOE', 'VidMoly', 'Sibnet', 'Sendvid', 'Earnvids', 'DoodStream', 'StreamTape', 'OneUpload', 'FileMoon'];
+
+function pickBestPlayer(players, current) {
+    if (!players || !players.length) return null;
+    if (current && players.includes(current)) return current;
+    for (const pref of PREFERRED_PLAYERS) {
+        const found = players.find(p => p.toLowerCase().includes(pref.toLowerCase()));
+        if (found) return found;
+    }
+    return players[0];
+}
