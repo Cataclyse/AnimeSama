@@ -5,7 +5,7 @@ use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, Instant};
 
-const CLIENT_ID: &str = "1348325988506079252";
+const CLIENT_ID: &str = "1569018746784456867";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PresencePayload {
