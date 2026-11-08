@@ -14,7 +14,10 @@ pub struct SeasonEpisodes {
 
 pub fn fetch_episodes(slug: &str, season_path: &str) -> Result<SeasonEpisodes, String> {
     let clean_slug = slug.trim().trim_matches('/');
-    let clean_season = season_path.trim().trim_matches('/');
+    let mut clean_season = season_path.trim().trim_matches('/').to_string();
+    if !clean_season.contains('/') && !clean_season.to_lowercase().starts_with("scan") {
+        clean_season = format!("{}/vostfr", clean_season);
+    }
 
     let base_url = format!("https://anime-sama.to/catalogue/{}/{}/", clean_slug, clean_season);
     let ep_url = format!("https://anime-sama.to/catalogue/{}/{}/episodes.js", clean_slug, clean_season);
@@ -59,29 +62,45 @@ pub fn fetch_episodes(slug: &str, season_path: &str) -> Result<SeasonEpisodes, S
         .timeout(std::time::Duration::from_secs(8))
         .call();
 
-    let mut actual_season = clean_season.to_string();
+    let mut actual_season = clean_season.clone();
     let js = match resp {
         Ok(r) => r.into_string().map_err(|e| format!("Erreur lecture episodes.js: {}", e))?,
         Err(_) => {
-            if !clean_season.ends_with("/vostfr") && clean_season.contains('/') {
-                let season_base = clean_season.split('/').next().unwrap_or("saison1");
-                let fallback_season = format!("{}/vostfr", season_base);
-                let fallback_url = format!("https://anime-sama.to/catalogue/{}/{}/episodes.js", clean_slug, fallback_season);
-                let fallback_base = format!("https://anime-sama.to/catalogue/{}/{}/", clean_slug, fallback_season);
-                match ureq::get(&fallback_url)
+            let season_base = clean_season.split('/').next().unwrap_or("saison1");
+            let fallback_season = format!("{}/vostfr", season_base);
+            let fallback_url = format!("https://anime-sama.to/catalogue/{}/{}/episodes.js", clean_slug, fallback_season);
+            let fallback_base = format!("https://anime-sama.to/catalogue/{}/{}/", clean_slug, fallback_season);
+
+            let fallback_res = if fallback_season != clean_season {
+                ureq::get(&fallback_url)
                     .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                     .set("Referer", &fallback_base)
                     .timeout(std::time::Duration::from_secs(8))
                     .call()
-                {
-                    Ok(r) => {
-                        actual_season = fallback_season;
-                        r.into_string().map_err(|e| format!("Erreur lecture episodes.js fallback: {}", e))?
-                    }
-                    Err(e) => return Err(format!("Erreur réseau pour {}: {}", ep_url, e)),
-                }
+                    .ok()
             } else {
-                return Err(format!("Erreur réseau pour {}", ep_url));
+                None
+            };
+
+            if let Some(r) = fallback_res {
+                actual_season = fallback_season;
+                r.into_string().map_err(|e| format!("Erreur lecture episodes.js fallback: {}", e))?
+            } else {
+                let first_path = fetch_first_season_path(clean_slug);
+                if let Some(first_season) = first_path {
+                    let first_url = format!("https://anime-sama.to/catalogue/{}/{}/episodes.js", clean_slug, first_season);
+                    let first_base = format!("https://anime-sama.to/catalogue/{}/{}/", clean_slug, first_season);
+                    let res_first = ureq::get(&first_url)
+                        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                        .set("Referer", &first_base)
+                        .timeout(std::time::Duration::from_secs(8))
+                        .call()
+                        .map_err(|e| format!("Erreur réseau pour {}: {}", first_url, e))?;
+                    actual_season = first_season;
+                    res_first.into_string().map_err(|e| format!("Erreur lecture episodes.js catalogue fallback: {}", e))?
+                } else {
+                    return Err(format!("Erreur réseau pour {}", ep_url));
+                }
             }
         }
     };
@@ -307,6 +326,33 @@ fn host_label(url: &str) -> Option<String> {
                 None => String::new(),
                 Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
             });
+        }
+    }
+    None
+}
+
+fn fetch_first_season_path(slug: &str) -> Option<String> {
+    let url = format!("https://anime-sama.to/catalogue/{}/", slug);
+    let resp = ureq::get(&url)
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .timeout(std::time::Duration::from_secs(6))
+        .call()
+        .ok()?;
+    let html = resp.into_string().ok()?;
+    let season_re = Regex::new(r#"panneauAnime\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']\s*\)"#).ok()?;
+    for cap in season_re.captures_iter(&html) {
+        let name = cap[1].trim();
+        let path = cap[2].trim().trim_matches('/');
+        if name.eq_ignore_ascii_case("nom") || path.eq_ignore_ascii_case("url") || name.starts_with("/*") {
+            continue;
+        }
+        if !path.is_empty() {
+            let normalized = if path.contains('/') {
+                path.to_string()
+            } else {
+                format!("{}/vostfr", path)
+            };
+            return Some(normalized);
         }
     }
     None

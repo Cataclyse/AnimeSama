@@ -222,9 +222,14 @@ let currentUpdateInfo = null;
 
 function updateCurrentVersionDisplay(version) {
     if (!version) return;
-    const title = document.getElementById('updateStatusTitle');
-    if (title) {
-        title.textContent = `${t('settings.update_status', 'Version actuelle')} : v${version}`;
+    const vSpan = document.getElementById('updateStatusVersion');
+    if (vSpan) {
+        vSpan.textContent = `v${version}`;
+    } else {
+        const title = document.getElementById('updateStatusTitle');
+        if (title) {
+            title.textContent = `${t('settings.update_status', 'Version actuelle')} : v${version}`;
+        }
     }
     const badge = document.getElementById('settingsVersionBadge');
     if (badge) {

@@ -51,8 +51,27 @@ function sendFrameMessage(msg) {
 
 async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) {
     try {
-        if (!State.currentEpisodes || State.currentEpisodes.slug !== slug || State.currentEpisodes.season !== seasonPath) {
-            const res = await fetch(`/api/episodes?slug=${slug}&season=${encodeURIComponent(seasonPath)}`);
+        let normalizedSeason = seasonPath;
+        if (!normalizedSeason || typeof normalizedSeason !== 'string') {
+            normalizedSeason = 'saison1/vostfr';
+        } else if (!normalizedSeason.includes('/')) {
+            normalizedSeason = `${normalizedSeason}/vostfr`;
+        }
+
+        if (!State.currentEpisodes || State.currentEpisodes.slug !== slug || State.currentEpisodes.season !== normalizedSeason) {
+            let res = await fetch(`/api/episodes?slug=${slug}&season=${encodeURIComponent(normalizedSeason)}`);
+            if (!res.ok) {
+                const animeRes = await fetch(`/api/anime?slug=${slug}`);
+                if (animeRes.ok) {
+                    const animeData = await animeRes.json();
+                    if (animeData.seasons && animeData.seasons.length > 0) {
+                        let altSeason = animeData.seasons[0].path;
+                        if (!altSeason.includes('/')) altSeason = `${altSeason}/vostfr`;
+                        normalizedSeason = altSeason;
+                        res = await fetch(`/api/episodes?slug=${slug}&season=${encodeURIComponent(normalizedSeason)}`);
+                    }
+                }
+            }
             if (!res.ok) throw new Error('Erreur récupération épisodes');
             State.currentEpisodes = await res.json();
             const players = Object.keys(State.currentEpisodes.players || {});
@@ -64,15 +83,26 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
             State.selectedPlayer = pickBestPlayer(players, State.selectedPlayer);
         }
 
-        const urls = State.currentEpisodes.players[State.selectedPlayer] || [];
-        if (!urls[episodeIndex]) {
+        let urls = State.currentEpisodes.players[State.selectedPlayer] || [];
+        let safeIdx = parseInt(episodeIndex, 10);
+        if (isNaN(safeIdx) || safeIdx < 0) safeIdx = 0;
+        if (urls.length > 0 && safeIdx >= urls.length) {
+            safeIdx = urls.length - 1;
+        }
+        episodeIndex = safeIdx;
+
+        let videoUrl = (State.currentEpisodes.players[State.selectedPlayer] || [])[episodeIndex];
+        if (!videoUrl) {
             const fallbackPlayer = players.find(p => (State.currentEpisodes.players[p] || [])[episodeIndex]);
             if (fallbackPlayer) {
                 State.selectedPlayer = fallbackPlayer;
-            } else {
-                showToast(t('player.link_unavailable', 'Lien d\'épisode indisponible'));
-                return;
+                videoUrl = (State.currentEpisodes.players[State.selectedPlayer] || [])[episodeIndex];
             }
+        }
+
+        if (!videoUrl) {
+            showToast(t('player.link_unavailable', "Lien d'épisode indisponible"));
+            return;
         }
 
         if (resumeSeconds === undefined || resumeSeconds === null) {
@@ -102,8 +132,6 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
         const animeTitle = State.currentAnime ? State.currentAnime.title : slug;
         loadSkipTimes(animeTitle, episodeIndex + 1);
 
-        const videoUrl = (State.currentEpisodes.players[State.selectedPlayer] || [])[episodeIndex];
-
         const titleEl = document.getElementById('playerTitle');
         const epTitleEl = document.getElementById('playerEpisodeTitle');
         const currentLangEl = document.getElementById('netflixCurrentLang');
@@ -117,6 +145,10 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
         if (currentServerEl) currentServerEl.textContent = State.selectedPlayer;
 
         let proxyUrl = toProxyUrl(videoUrl);
+        if (!proxyUrl) {
+            showToast(t('player.launch_error', 'Impossible de lancer le lecteur'));
+            return;
+        }
         const sep = proxyUrl.includes('?') ? '&' : '?';
         const qParams = [];
         if (resumeSeconds > 0) {

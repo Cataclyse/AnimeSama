@@ -117,9 +117,12 @@ function updateModalPlayButton(anime) {
     if (!anime) anime = State.currentAnime;
     if (!anime) return;
 
-    const activeSeason = (DOM.modalSeasonSelect && DOM.modalSeasonSelect.value)
+    let activeSeason = (DOM.modalSeasonSelect && DOM.modalSeasonSelect.value)
         ? DOM.modalSeasonSelect.value
         : (State.currentEpisodes ? State.currentEpisodes.season : 'saison1/vostfr');
+    if (!activeSeason.includes('/')) {
+        activeSeason = getSeasonPathForLang(activeSeason, State.selectedLanguage);
+    }
     const currentSeasonBase = (activeSeason || 'saison1').split('/')[0];
     const seasonNum = currentSeasonBase.replace(/[^0-9]/g, '') || '1';
 
@@ -133,9 +136,13 @@ function updateModalPlayButton(anime) {
         ? historyItem
         : null;
 
-    const lastWatchedEp = progForThisSeason ? progForThisSeason.episode : (historyForThisSeason ? historyForThisSeason.episode : 0);
+    let lastWatchedEp = progForThisSeason ? progForThisSeason.episode : (historyForThisSeason ? historyForThisSeason.episode : 0);
+    const maxEps = (State.currentEpisodes && State.currentEpisodes.total_episodes > 0) ? State.currentEpisodes.total_episodes : 9999;
+    if (lastWatchedEp > maxEps) {
+        lastWatchedEp = 1;
+    }
 
-    if (progForThisSeason && progForThisSeason.currentTime > 5) {
+    if (progForThisSeason && progForThisSeason.currentTime > 5 && progForThisSeason.episode <= maxEps) {
         const curMins = Math.floor(progForThisSeason.currentTime / 60);
         const totalMins = Math.floor((progForThisSeason.duration || 1440) / 60);
         const pct = Math.min(100, Math.round((progForThisSeason.currentTime / (progForThisSeason.duration || 1440)) * 100));
@@ -175,7 +182,10 @@ function updateModalPlayButton(anime) {
 
     if (DOM.modalPlayBtn) {
         DOM.modalPlayBtn.onclick = () => {
-            openEpisodePlayer(anime.slug, activeSeason, targetIdx, null);
+            const seasonToPlay = (DOM.modalSeasonSelect && DOM.modalSeasonSelect.value)
+                ? getSeasonPathForLang(DOM.modalSeasonSelect.value, State.selectedLanguage)
+                : activeSeason;
+            openEpisodePlayer(anime.slug, seasonToPlay, targetIdx, null);
         };
     }
 }
