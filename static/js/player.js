@@ -51,6 +51,23 @@ function syncDiscordRpc(force = false) {
     }).catch(() => {});
 }
 
+function sendNavigationRpc(title = 'Page d\'accueil') {
+    lastDiscordRpcStatus = 'idle';
+    lastDiscordRpcEpisode = null;
+    fetch('/api/rpc/presence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            title: title,
+            episode: null,
+            season: null,
+            status: 'idle',
+            duration: null,
+            current_time: null
+        })
+    }).catch(() => {});
+}
+
 const VIDEO_FILTERS = {
     normal: 'none',
     auto: 'contrast(1.15) saturate(1.4) brightness(1.04)',
@@ -101,7 +118,7 @@ function updateAppTitle(isPlaying) {
         const lang = (State.selectedLanguage || 'vostfr').toUpperCase();
         document.title = `Anime-Sama — ${title} — Ep ${ep} (${lang})`;
     } else {
-        document.title = 'Anime-Sama';
+        document.title = 'Anime-Sama — Page d\'accueil';
     }
 }
 
@@ -1220,7 +1237,7 @@ function changeEpisode(delta) {
 function closePlayerModal() {
     lastDiscordRpcStatus = null;
     lastDiscordRpcEpisode = null;
-    fetch('/api/rpc/clear', { method: 'POST' }).catch(() => {});
+    sendNavigationRpc('Page d\'accueil');
     stopDynamicFilter();
     flushCurrentPlayback();
     stopPlayerPolling();

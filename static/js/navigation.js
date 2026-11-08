@@ -14,25 +14,39 @@ function switchView(viewName) {
     switch (viewName) {
         case 'home':
             document.getElementById('viewHome').classList.add('active');
+            document.title = 'Anime-Sama — Page d\'accueil';
+            if (typeof sendNavigationRpc === 'function') sendNavigationRpc('Page d\'accueil');
             break;
         case 'animes':
             showCatalogueFiltered('Séries & Animes', 'Anime');
+            document.title = 'Anime-Sama — Séries & Animes';
+            if (typeof sendNavigationRpc === 'function') sendNavigationRpc('Séries & Animes');
             break;
         case 'scans':
             showCatalogueFiltered('Scans & Webtoons', 'Webtoon');
+            document.title = 'Anime-Sama — Scans & Webtoons';
+            if (typeof sendNavigationRpc === 'function') sendNavigationRpc('Scans & Webtoons');
             break;
         case 'classiques':
             showClassiquesGrid();
+            document.title = 'Anime-Sama — Les Classiques';
+            if (typeof sendNavigationRpc === 'function') sendNavigationRpc('Les Classiques');
             break;
         case 'planning':
             document.getElementById('viewPlanning').classList.add('active');
+            document.title = 'Anime-Sama — Planning des sorties';
+            if (typeof sendNavigationRpc === 'function') sendNavigationRpc('Planning des sorties');
             break;
         case 'watchlist':
             document.getElementById('viewWatchlist').classList.add('active');
             renderWatchlistView();
+            document.title = 'Anime-Sama — Ma liste';
+            if (typeof sendNavigationRpc === 'function') sendNavigationRpc('Ma liste');
             break;
         case 'search':
             document.getElementById('viewSearch').classList.add('active');
+            document.title = 'Anime-Sama — Recherche';
+            if (typeof sendNavigationRpc === 'function') sendNavigationRpc('Recherche');
             break;
     }
 }

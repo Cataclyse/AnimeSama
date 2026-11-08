@@ -1,4 +1,6 @@
 document.addEventListener('DOMContentLoaded', async () => {
+    document.title = 'Anime-Sama — Page d\'accueil';
+    if (typeof sendNavigationRpc === 'function') sendNavigationRpc('Page d\'accueil');
     setupEventListeners();
     await loadUserData();
     await loadHomeData();

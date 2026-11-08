@@ -128,7 +128,7 @@ function updateAppTitle(isPlaying) {
         const lang = (State.selectedLanguage || 'vostfr').toUpperCase();
         document.title = `Anime-Sama — ${title} — Ep ${ep} (${lang})`;
     } else {
-        document.title = 'Anime-Sama';
+        document.title = 'Anime-Sama — Page d\'accueil';
     }
 }
 
