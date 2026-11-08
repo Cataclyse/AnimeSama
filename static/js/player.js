@@ -58,6 +58,7 @@ function syncDiscordRpc(force = false) {
 
     const animeTitle = State.currentAnime ? State.currentAnime.title : (State.currentEpisodes ? State.currentEpisodes.slug : '');
     const season = State.currentEpisodes ? State.currentEpisodes.season : null;
+    const poster = State.currentAnime ? State.currentAnime.banner : null;
 
     fetch('/api/rpc/presence', {
         method: 'POST',
@@ -68,7 +69,8 @@ function syncDiscordRpc(force = false) {
             season: season,
             status: currentStatus,
             duration: Math.floor(playerState.duration || 0),
-            current_time: Math.floor(curTime)
+            current_time: Math.floor(curTime),
+            poster: poster
         })
     }).catch(() => {});
 }

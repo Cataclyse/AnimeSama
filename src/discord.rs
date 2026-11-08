@@ -75,10 +75,16 @@ pub fn init_discord_rpc() {
                             state_parts.join(" • ")
                         };
                         act = act.state(&state_str);
+                        act = act.activity_type(activity::ActivityType::Watching);
 
+                        let large_image = payload
+                            .poster
+                            .as_deref()
+                            .filter(|p| !p.is_empty())
+                            .unwrap_or("animesama_logo");
                         let mut assets = activity::Assets::new()
-                            .large_image("animesama_logo")
-                            .large_text("Anime-Sama");
+                            .large_image(large_image)
+                            .large_text(details_text.clone());
 
                         if payload.status == "playing" {
                             assets = assets.small_image("play").small_text("En lecture");
@@ -105,8 +111,11 @@ pub fn init_discord_rpc() {
                                         _ => computed_start,
                                     };
                                     cached_start_ts = Some(start_ts);
+                                    let end_ts = start_ts + dur;
                                     act = act.timestamps(
-                                        activity::Timestamps::new().start(start_ts as i64),
+                                        activity::Timestamps::new()
+                                            .start(start_ts as i64)
+                                            .end(end_ts as i64),
                                     );
                                 }
                             }
