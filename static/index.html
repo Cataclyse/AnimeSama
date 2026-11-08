@@ -399,7 +399,7 @@
                             <div class="netflix-speed-menu" id="netflixSpeedMenu" style="display: none;">
                                 <button class="netflix-speed-opt" onclick="setSpeed(0.5)">0.5x</button>
                                 <button class="netflix-speed-opt" onclick="setSpeed(0.75)">0.75x</button>
-                                <button class="netflix-speed-opt active" onclick="setSpeed(1)">1x (Normal)</button>
+                                <button class="netflix-speed-opt active" onclick="setSpeed(1)">1x (<span data-i18n="player.normal">Normal</span>)</button>
                                 <button class="netflix-speed-opt" onclick="setSpeed(1.25)">1.25x</button>
                                 <button class="netflix-speed-opt" onclick="setSpeed(1.5)">1.5x</button>
                                 <button class="netflix-speed-opt" onclick="setSpeed(2)">2x</button>
@@ -451,7 +451,7 @@
             <div class="netflix-settings-header">
                 <div class="netflix-settings-brand">
                     <h2 class="netflix-settings-title" data-i18n="settings.title">Paramètres</h2>
-                    <span class="netflix-settings-badge" id="settingsVersionBadge">v0.1.17</span>
+                    <span class="netflix-settings-badge" id="settingsVersionBadge">v0.1.22</span>
                 </div>
                 <button class="netflix-settings-close" id="accountCloseBtn" onclick="closeAccountModal()" aria-label="Fermer" data-i18n-title="modal.close">✕</button>
             </div>
@@ -585,14 +585,14 @@
                         </div>
 
                         <div class="netflix-card">
-                            <div class="netflix-card-title">État de la synchronisation</div>
+                            <div class="netflix-card-title" data-i18n="settings.sync_card_title">État de la synchronisation</div>
                             <div class="netflix-card-row">
-                                <span>Serveur distant</span>
+                                <span data-i18n="settings.sync_remote_server">Serveur distant</span>
                                 <strong>anime-sama.to</strong>
                             </div>
                             <div class="netflix-card-row">
-                                <span>Protocole</span>
-                                <span>Bidirectionnel sécurisé</span>
+                                <span data-i18n="settings.sync_protocol">Protocole</span>
+                                <span data-i18n="settings.sync_protocol_val">Bidirectionnel sécurisé</span>
                             </div>
                         </div>
                     </div>
@@ -617,18 +617,18 @@
                         </div>
 
                         <div class="netflix-card">
-                            <div class="netflix-card-title">Protection active</div>
+                            <div class="netflix-card-title" data-i18n="settings.shield_card_title">Protection active</div>
                             <div class="netflix-card-row">
-                                <span>Lecteurs protégés</span>
+                                <span data-i18n="settings.shield_protected_players">Lecteurs protégés</span>
                                 <strong>VOE, VidMoly, Uqload</strong>
                             </div>
                             <div class="netflix-card-row">
-                                <span>Proxy local</span>
-                                <span class="netflix-badge-green">Actif (127.0.0.1)</span>
+                                <span data-i18n="settings.shield_local_proxy">Proxy local</span>
+                                <span class="netflix-badge-green" data-i18n="settings.shield_proxy_status">Actif (127.0.0.1)</span>
                             </div>
                             <div class="netflix-card-row">
-                                <span>Isolation sandbox</span>
-                                <span>Scripts tiers neutralisés</span>
+                                <span data-i18n="settings.shield_sandbox">Isolation sandbox</span>
+                                <span data-i18n="settings.shield_sandbox_desc">Scripts tiers neutralisés</span>
                             </div>
                         </div>
                     </div>
@@ -683,14 +683,14 @@
                         </div>
 
                         <div class="netflix-card">
-                            <div class="netflix-card-title">Informations système</div>
+                            <div class="netflix-card-title" data-i18n="settings.sys_card_title">Informations système</div>
                             <div class="netflix-card-row">
-                                <span>Version installée</span>
-                                <strong id="settingsInfoVersion">v0.1.17</strong>
+                                <span data-i18n="settings.sys_installed_version">Version installée</span>
+                                <strong id="settingsInfoVersion">v0.1.22</strong>
                             </div>
                             <div class="netflix-card-row">
-                                <span>Canal de mise à jour</span>
-                                <span>GitHub Releases (Cataclyse/AnimeSama)</span>
+                                <span data-i18n="settings.sys_update_channel">Canal de mise à jour</span>
+                                <span data-i18n="settings.sys_channel_source">GitHub Releases (Cataclyse/AnimeSama)</span>
                             </div>
                         </div>
                     </div>

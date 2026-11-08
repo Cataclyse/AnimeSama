@@ -1,6 +1,7 @@
 pub mod handlers;
 pub mod routes;
 pub mod static_files;
+pub mod translate;
 
 use crate::catalogue::CatalogData;
 use crate::scraper::Scraper;
@@ -16,6 +17,7 @@ pub struct AppState {
     pub user_mgr: UserManager,
     pub auth: AuthClient,
     pub is_syncing: AtomicBool,
+    pub translation_cache: translate::TranslationCache,
 }
 
 pub fn start_server(port: u16) -> (Arc<AppState>, thread::JoinHandle<()>) {
@@ -44,6 +46,7 @@ pub fn start_server(port: u16) -> (Arc<AppState>, thread::JoinHandle<()>) {
         user_mgr,
         auth,
         is_syncing: AtomicBool::new(false),
+        translation_cache: translate::new_translation_cache(),
     });
 
     let s = state.clone();

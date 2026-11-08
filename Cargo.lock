@@ -19,7 +19,7 @@ dependencies = [
 
 [[package]]
 name = "animesama"
-version = "0.1.17"
+version = "0.1.22"
 dependencies = [
  "opener",
  "regex",

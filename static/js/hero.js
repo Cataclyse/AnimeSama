@@ -30,6 +30,13 @@ function renderSlide(index) {
     DOM.heroBadge.textContent = slide.badge || 'Populaire';
     DOM.heroTitle.textContent = slide.title;
     DOM.heroSynopsis.textContent = slide.synopsis;
+    if (typeof translateContent === 'function' && State.appLang && State.appLang !== 'fr' && slide.synopsis) {
+        translateContent(slide.synopsis, State.appLang).then(translated => {
+            if (State.currentSlide === index && DOM.heroSynopsis) {
+                DOM.heroSynopsis.textContent = translated;
+            }
+        });
+    }
 
     
     DOM.heroGenres.innerHTML = (slide.genres || []).map(g => `<span class="genre-tag">${g}</span>`).join('');

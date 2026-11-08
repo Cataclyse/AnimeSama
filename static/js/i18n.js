@@ -85,6 +85,34 @@ async function fetchLanguageData(code) {
     return null;
 }
 
+const dynamicTranslationCache = {};
+
+async function translateContent(text, targetLang) {
+    if (!text || typeof text !== 'string') return text || '';
+    const clean = text.trim();
+    if (!clean) return clean;
+    const lang = (targetLang || (typeof State !== 'undefined' ? State.appLang : null) || 'fr').toLowerCase();
+    if (lang === 'fr') return clean;
+
+    const cacheKey = `${lang}:${clean}`;
+    if (dynamicTranslationCache[cacheKey]) {
+        return dynamicTranslationCache[cacheKey];
+    }
+
+    try {
+        const res = await fetch(`/api/translate?target=${encodeURIComponent(lang)}&text=${encodeURIComponent(clean)}`);
+        if (res.ok) {
+            const data = await res.json();
+            if (data.translated && data.translated.trim()) {
+                dynamicTranslationCache[cacheKey] = data.translated;
+                return data.translated;
+            }
+        }
+    } catch (_) {}
+
+    return clean;
+}
+
 function t(key, fallback) {
     if (currentI18nStrings && key in currentI18nStrings) {
         return currentI18nStrings[key];
@@ -194,6 +222,30 @@ function updateDynamicTranslations() {
     }
     if (typeof updateModalPlayButton === 'function' && typeof State !== 'undefined' && State.currentAnime) {
         updateModalPlayButton(State.currentAnime);
+    }
+    if (typeof renderEpisodesGrid === 'function' && typeof State !== 'undefined' && State.currentEpisodes) {
+        renderEpisodesGrid();
+    }
+    if (typeof DOM !== 'undefined' && DOM.heroSynopsis && typeof State !== 'undefined' && State.homeData && State.homeData.slides && State.homeData.slides[State.currentSlide]) {
+        const slide = State.homeData.slides[State.currentSlide];
+        if (State.appLang === 'fr') {
+            DOM.heroSynopsis.textContent = slide.synopsis;
+        } else if (typeof translateContent === 'function' && slide.synopsis) {
+            translateContent(slide.synopsis, State.appLang).then(t => {
+                if (DOM.heroSynopsis) DOM.heroSynopsis.textContent = t;
+            });
+        }
+    }
+    if (typeof DOM !== 'undefined' && DOM.modalSynopsis && typeof State !== 'undefined' && State.currentAnime && State.currentAnime.synopsis) {
+        if (State.appLang === 'fr') {
+            DOM.modalSynopsis.textContent = State.currentAnime.synopsis;
+        } else if (typeof translateContent === 'function') {
+            translateContent(State.currentAnime.synopsis, State.appLang).then(translated => {
+                if (DOM.modalSynopsis && State.currentAnime) {
+                    DOM.modalSynopsis.textContent = translated;
+                }
+            });
+        }
     }
 }
 

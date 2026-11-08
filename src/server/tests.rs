@@ -64,3 +64,20 @@ fn test_build_progress_payload() {
     assert_eq!(payload["/catalogue/frieren/saison1/vostfr/"]["num"], 4);
     assert_eq!(payload["/catalogue/frieren/saison1/vostfr/"]["name"], "Episode 4");
 }
+
+#[test]
+fn test_translate_passthrough_and_cache() {
+    let cache = super::translate::new_translation_cache();
+    let res_fr = super::translate::translate_text(&cache, "Bonjour le monde", "fr");
+    assert_eq!(res_fr, "Bonjour le monde");
+
+    let res_empty = super::translate::translate_text(&cache, "", "en");
+    assert_eq!(res_empty, "");
+
+    {
+        let mut c = cache.lock().unwrap();
+        c.insert(("en".to_string(), "Test".to_string()), "Pre-cached".to_string());
+    }
+    let res_cached = super::translate::translate_text(&cache, "Test", "en");
+    assert_eq!(res_cached, "Pre-cached");
+}

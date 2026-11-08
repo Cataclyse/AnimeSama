@@ -411,6 +411,34 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
             }).to_string());
         }
 
+        ("GET", "/api/translate") => {
+            let text = query_params.get("text").cloned().unwrap_or_default();
+            let target = query_params.get("target").cloned().unwrap_or_else(|| "fr".to_string());
+            let translated = super::translate::translate_text(&state.translation_cache, &text, &target);
+            respond_json(req, &json!({
+                "original": text,
+                "translated": translated,
+                "target": target
+            }).to_string());
+        }
+
+        ("POST", "/api/translate") => {
+            let mut content = String::new();
+            let _ = req.as_reader().read_to_string(&mut content);
+            let parsed: serde_json::Value = serde_json::from_str(&content).unwrap_or_default();
+            let target = parsed.get("target").and_then(|v| v.as_str()).unwrap_or("fr");
+
+            if let Some(arr) = parsed.get("texts").and_then(|v| v.as_array()) {
+                let texts: Vec<String> = arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                let translated = super::translate::translate_batch(&state.translation_cache, &texts, target);
+                respond_json(req, &json!({ "translated": translated, "target": target }).to_string());
+            } else {
+                let text = parsed.get("text").and_then(|v| v.as_str()).unwrap_or("");
+                let translated = super::translate::translate_text(&state.translation_cache, text, target);
+                respond_json(req, &json!({ "original": text, "translated": translated, "target": target }).to_string());
+            }
+        }
+
         ("GET", "/api/update/check") => {
             match crate::update::check_for_updates() {
                 Ok(info) => respond_json(req, &json!(info).to_string()),
