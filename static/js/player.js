@@ -51,6 +51,15 @@ function sendFrameMessage(msg) {
 
 async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) {
     try {
+        if (!State.currentAnime || State.currentAnime.slug !== slug) {
+            try {
+                const aRes = await fetch(`/api/anime?slug=${encodeURIComponent(slug)}`);
+                if (aRes.ok) {
+                    State.currentAnime = await aRes.json();
+                }
+            } catch (e) {}
+        }
+
         let normalizedSeason = seasonPath;
         if (!normalizedSeason || typeof normalizedSeason !== 'string') {
             normalizedSeason = 'saison1/vostfr';
@@ -105,10 +114,14 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
             return;
         }
 
+        let estimatedDuration = 1440;
         if (resumeSeconds === undefined || resumeSeconds === null) {
-            const epProg = getEpisodeProgress(slug, episodeIndex + 1);
-            const animeProg = getPlaybackProgress(slug);
+            const epProg = (typeof getEpisodeProgress === 'function') ? getEpisodeProgress(slug, episodeIndex + 1, normalizedSeason) : null;
+            const animeProg = (typeof getPlaybackProgress === 'function') ? getPlaybackProgress(slug) : null;
             const prog = epProg || ((animeProg && animeProg.episode === episodeIndex + 1) ? animeProg : null);
+            if (prog && prog.duration && prog.duration > 60) {
+                estimatedDuration = prog.duration;
+            }
             if (prog && prog.currentTime > 5) {
                 if (prog.duration && prog.duration > 60 && prog.currentTime >= prog.duration - 20) {
                     resumeSeconds = 0;
@@ -118,12 +131,21 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
             } else {
                 resumeSeconds = 0;
             }
+        } else {
+            resumeSeconds = parseFloat(resumeSeconds) || 0;
+            const epProg = (typeof getEpisodeProgress === 'function') ? getEpisodeProgress(slug, episodeIndex + 1, normalizedSeason) : null;
+            const animeProg = (typeof getPlaybackProgress === 'function') ? getPlaybackProgress(slug) : null;
+            const prog = epProg || ((animeProg && animeProg.episode === episodeIndex + 1) ? animeProg : null);
+            if (prog && prog.duration && prog.duration > 60) {
+                estimatedDuration = prog.duration;
+            }
         }
 
+        State.targetResumeTime = resumeSeconds > 5 ? resumeSeconds : 0;
         State.currentEpIndex = episodeIndex;
         State.lastCurrentTime = resumeSeconds || 0;
         playerState.currentTime = resumeSeconds || 0;
-        playerState.duration = 0;
+        playerState.duration = estimatedDuration;
         playerState.paused = false;
         playerState.nextPromptActive = false;
         playerState.skipData = null;
@@ -163,9 +185,22 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
                 syncPlayerMediaMetadata();
                 startPlayerPolling();
                 sendFrameMessage({ type: 'AS_PLAY' });
-                setTimeout(() => sendFrameMessage({ type: 'AS_PLAY' }), 300);
-                setTimeout(() => sendFrameMessage({ type: 'AS_PLAY' }), 800);
-                setTimeout(() => sendFrameMessage({ type: 'AS_PLAY' }), 1600);
+                if (resumeSeconds > 5) {
+                    sendFrameMessage({ type: 'AS_SEEK_TO', time: resumeSeconds });
+                }
+                const seekDelays = [200, 500, 900, 1500, 2500, 4000];
+                seekDelays.forEach(delay => {
+                    setTimeout(() => {
+                        sendFrameMessage({ type: 'AS_PLAY' });
+                        if (State.targetResumeTime > 5) {
+                            sendFrameMessage({ type: 'AS_SEEK_TO', time: State.targetResumeTime });
+                            const v = getIframeVideo();
+                            if (v && v.currentTime < State.targetResumeTime - 2) {
+                                try { v.currentTime = State.targetResumeTime; } catch (e) {}
+                            }
+                        }
+                    }, delay);
+                });
             };
             iframe.src = proxyUrl;
         }
@@ -185,6 +220,9 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
         startPlayerPolling();
         updatePlayPauseButton(true);
         syncPlayerMediaMetadata();
+
+        renderScrubber(resumeSeconds, estimatedDuration, 0);
+        renderTimeDisplay(resumeSeconds, estimatedDuration);
 
         const promptEl = document.getElementById('netflixNextPrompt');
         if (promptEl) promptEl.style.display = 'none';
@@ -266,10 +304,21 @@ function stopPlayerPolling() {
 
 function updateFromVideoElement(v) {
     if (!v || isNaN(v.currentTime)) return;
-    const ct = v.currentTime;
     const dur = v.duration || 0;
     const paused = v.paused;
 
+    if (State.targetResumeTime && State.targetResumeTime > 5) {
+        if (v.currentTime < State.targetResumeTime - 2) {
+            try {
+                v.currentTime = State.targetResumeTime;
+            } catch (e) {}
+            return;
+        } else {
+            State.targetResumeTime = 0;
+        }
+    }
+
+    const ct = v.currentTime;
     let bEnd = 0;
     try {
         if (v.buffered && v.buffered.length > 0) {
@@ -1169,10 +1218,23 @@ function initNetflixPlayerEvents() {
             const dur = parseFloat(ev.data.duration) || 0;
             const bEnd = parseFloat(ev.data.bufferedEnd) || 0;
             const paused = ev.data.paused !== undefined ? !!ev.data.paused : playerState.paused;
+
+            if (State.targetResumeTime && State.targetResumeTime > 5) {
+                if (ct < State.targetResumeTime - 2) {
+                    sendFrameMessage({ type: 'AS_SEEK_TO', time: State.targetResumeTime });
+                    return;
+                } else {
+                    State.targetResumeTime = 0;
+                }
+            }
+
             syncPlaybackState(ct, dur, bEnd, paused, ev.data.volume, ev.data.muted);
 
-            if (ev.data.ep && State.currentAnime) {
-                recordEpisodeProgress(State.currentAnime.slug, ev.data.ep, ct, dur);
+            const epSlug = (State.currentAnime && State.currentAnime.slug)
+                ? State.currentAnime.slug
+                : (State.currentEpisodes ? State.currentEpisodes.slug : null);
+            if (ev.data.ep && epSlug) {
+                recordEpisodeProgress(epSlug, ev.data.ep, ct, dur);
             }
         } else if (ev.data.type === 'AS_PLAY_STATE') {
             playerState.paused = !!ev.data.paused;

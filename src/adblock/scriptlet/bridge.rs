@@ -72,6 +72,13 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
         try {{
             if (window.player) fn(window.player, 'player');
         }} catch(e) {{}}
+        try {{
+            if (window.videojs && typeof window.videojs.players === 'object') {{
+                for (var key in window.videojs.players) {{
+                    if (window.videojs.players[key]) fn(window.videojs.players[key], 'vjs');
+                }}
+            }}
+        }} catch(e) {{}}
     }}
 
     function triggerHosterPlay() {{
@@ -127,9 +134,12 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
         function attemptSeek() {{
             if (v._asSeekCompleted || resumeTarget <= 2) return;
             try {{
+                withHoster(function(p) {{
+                    if (typeof p.seek === 'function') p.seek(resumeTarget);
+                    else if (typeof p.currentTime !== 'undefined') p.currentTime = resumeTarget;
+                }});
                 if (v.readyState >= 1 || (v.duration && v.duration > 2) || v.currentTime > 0) {{
                     v.currentTime = resumeTarget;
-                    if (Math.abs(v.currentTime - resumeTarget) < 3) v._asSeekCompleted = true;
                 }}
             }} catch(e) {{}}
         }}
@@ -150,14 +160,14 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
         v.addEventListener('ended', function() {{ notify('AS_ENDED'); report(v, true); }}, {{ passive: true }});
 
         v.addEventListener('seeked', function() {{
-            if (resumeTarget > 2 && Math.abs(v.currentTime - resumeTarget) < 4) v._asSeekCompleted = true;
+            if (resumeTarget > 2 && v.currentTime >= resumeTarget - 3) v._asSeekCompleted = true;
             report(v, true);
         }}, {{ passive: true }});
 
         v.addEventListener('timeupdate', function() {{
             if (!v._asSeekCompleted && resumeTarget > 2) {{
                 if (v.currentTime < resumeTarget - 2) {{
-                    try {{ v.currentTime = resumeTarget; }} catch(e) {{}}
+                    attemptSeek();
                     return;
                 }}
                 v._asSeekCompleted = true;
@@ -231,6 +241,8 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
         if (d.type === 'AS_SEEK_TO') {{
             var target = parseFloat(d.time);
             if (!isNaN(target)) {{
+                resumeTarget = target;
+                if (v) v._asSeekCompleted = (target <= 2);
                 withHoster(function(p) {{
                     if (typeof p.seek === 'function') p.seek(target);
                     else if (typeof p.currentTime !== 'undefined') p.currentTime = target;

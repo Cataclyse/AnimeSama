@@ -248,7 +248,19 @@ function createCardHTML(card) {
 function resumeAnimePlayback(slug, season, epIdx, curTime) {
     if (typeof openEpisodePlayer === 'function') {
         const safeIdx = Math.max(0, parseInt(epIdx, 10) || 0);
-        const resumeSec = (parseFloat(curTime) > 5) ? parseFloat(curTime) : null;
+        let resumeSec = (parseFloat(curTime) > 5) ? parseFloat(curTime) : null;
+        if (!resumeSec && typeof getEpisodeProgress === 'function') {
+            const epP = getEpisodeProgress(slug, safeIdx + 1, season);
+            if (epP && epP.currentTime > 5) {
+                resumeSec = epP.currentTime;
+            }
+        }
+        if (!resumeSec && typeof getPlaybackProgress === 'function') {
+            const aP = getPlaybackProgress(slug);
+            if (aP && aP.episode === (safeIdx + 1) && aP.currentTime > 5) {
+                resumeSec = aP.currentTime;
+            }
+        }
         openEpisodePlayer(slug, season || 'saison1/vostfr', safeIdx, resumeSec);
     }
 }
@@ -262,8 +274,16 @@ function renderContinueWatchingRow() {
         const savedProg = (typeof getPlaybackProgress === 'function') ? getPlaybackProgress(h.slug) : null;
         const ep = (savedProg && savedProg.episode) ? savedProg.episode : (h.episode || 1);
         const season = (savedProg && savedProg.season) ? savedProg.season : (h.season || 'saison1/vostfr');
-        const curTime = (savedProg && savedProg.currentTime) ? savedProg.currentTime : 0;
-        const dur = (savedProg && savedProg.duration && savedProg.duration > 60) ? savedProg.duration : 1440;
+        let curTime = (savedProg && savedProg.currentTime) ? savedProg.currentTime : 0;
+        let dur = (savedProg && savedProg.duration && savedProg.duration > 60) ? savedProg.duration : 0;
+        if (!curTime && typeof getEpisodeProgress === 'function') {
+            const epP = getEpisodeProgress(h.slug, ep, season);
+            if (epP && epP.currentTime) {
+                curTime = epP.currentTime;
+                if (!dur && epP.duration) dur = epP.duration;
+            }
+        }
+        if (!dur || dur <= 60) dur = 1440;
         const pct = curTime > 5 ? Math.min(100, Math.round((curTime / dur) * 100)) : 30;
         const timestamp = (savedProg && savedProg.timestamp) ? savedProg.timestamp : ((h.timestamp || 0) * 1000);
 
@@ -272,7 +292,7 @@ function renderContinueWatchingRow() {
 
         continueMap.set(h.slug, {
             slug: h.slug,
-            title: h.title || h.slug,
+            title: h.title || (savedProg && savedProg.title) || h.slug,
             season: season,
             seasonNum: seasonNum,
             episode: ep,
@@ -295,14 +315,23 @@ function renderContinueWatchingRow() {
                             const season = savedProg.season || 'saison1/vostfr';
                             const seasonBase = season.split('/')[0];
                             const seasonNum = seasonBase.replace(/[^0-9]/g, '') || '1';
-                            const dur = (savedProg.duration && savedProg.duration > 60) ? savedProg.duration : 1440;
-                            const curTime = savedProg.currentTime || 0;
+                            const ep = savedProg.episode || 1;
+                            let dur = (savedProg.duration && savedProg.duration > 60) ? savedProg.duration : 0;
+                            let curTime = savedProg.currentTime || 0;
+                            if (!curTime && typeof getEpisodeProgress === 'function') {
+                                const epP = getEpisodeProgress(slug, ep, season);
+                                if (epP && epP.currentTime) {
+                                    curTime = epP.currentTime;
+                                    if (!dur && epP.duration) dur = epP.duration;
+                                }
+                            }
+                            if (!dur || dur <= 60) dur = 1440;
                             continueMap.set(slug, {
                                 slug: slug,
                                 title: savedProg.title || slug,
                                 season: season,
                                 seasonNum: seasonNum,
-                                episode: savedProg.episode || 1,
+                                episode: ep,
                                 currentTime: curTime,
                                 duration: dur,
                                 progressPercent: curTime > 5 ? Math.min(100, Math.round((curTime / dur) * 100)) : 30,
