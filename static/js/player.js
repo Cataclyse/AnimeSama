@@ -126,7 +126,13 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
         proxyUrl += `${sep}${qParams.join('&')}`;
 
         const iframe = document.getElementById('videoIframe');
-        if (iframe) iframe.src = proxyUrl;
+        if (iframe) {
+            iframe.onload = () => {
+                syncPlayerMediaMetadata();
+                startPlayerPolling();
+            };
+            iframe.src = proxyUrl;
+        }
 
         const modal = document.getElementById('playerModal');
         if (modal) modal.classList.add('open');
@@ -142,6 +148,7 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
         resetIdleTimer();
         startPlayerPolling();
         updatePlayPauseButton(true);
+        syncPlayerMediaMetadata();
 
         const promptEl = document.getElementById('netflixNextPrompt');
         if (promptEl) promptEl.style.display = 'none';
@@ -154,14 +161,64 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
     }
 }
 
+function syncPlayerMediaMetadata() {
+    try {
+        const animeTitle = State.currentAnime ? State.currentAnime.title : '';
+        const epNum = State.currentEpIndex !== undefined ? (State.currentEpIndex + 1) : 1;
+        const epTitle = `${t('modal.episode_single', 'Épisode')} ${epNum}`;
+        const poster = State.currentAnime && State.currentAnime.poster ? State.currentAnime.poster : '';
+        const fullTitle = animeTitle ? `${animeTitle} - ${epTitle}` : epTitle;
+
+        document.title = fullTitle;
+
+        const v = getIframeVideo();
+        if (v) {
+            try {
+                const doc = v.ownerDocument || document;
+                if (doc) doc.title = fullTitle;
+                v.title = fullTitle;
+            } catch (err) {}
+        }
+
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: epTitle,
+                artist: animeTitle || 'Anime-Sama',
+                album: 'Anime-Sama',
+                artwork: poster ? [{ src: poster, sizes: '512x512', type: 'image/jpeg' }] : []
+            });
+        }
+
+        sendFrameMessage({
+            type: 'AS_SET_METADATA',
+            animeTitle,
+            epTitle,
+            poster
+        });
+    } catch (e) {}
+}
+
 function startPlayerPolling() {
     stopPlayerPolling();
+    const bindNativeVideoEvents = () => {
+        const v = getIframeVideo();
+        if (v && !v._asParentBound) {
+            v._asParentBound = true;
+            const handler = () => updateFromVideoElement(v);
+            v.addEventListener('timeupdate', handler, { passive: true });
+            v.addEventListener('progress', handler, { passive: true });
+            v.addEventListener('seeking', handler, { passive: true });
+            v.addEventListener('seeked', handler, { passive: true });
+        }
+    };
+    bindNativeVideoEvents();
     playerState.pollInterval = setInterval(() => {
+        bindNativeVideoEvents();
         const v = getIframeVideo();
         if (v) {
             updateFromVideoElement(v);
         }
-    }, 250);
+    }, 1000);
 }
 
 function stopPlayerPolling() {
@@ -679,6 +736,11 @@ function selectEpisodeFromDrawer(index) {
 
 async function togglePictureInPicture() {
     try {
+        if (window.documentPictureInPicture && window.documentPictureInPicture.window) {
+            window.documentPictureInPicture.window.close();
+            resetIdleTimer();
+            return;
+        }
         if (document.pictureInPictureElement) {
             await document.exitPictureInPicture();
             resetIdleTimer();
@@ -692,15 +754,93 @@ async function togglePictureInPicture() {
                 resetIdleTimer();
                 return;
             }
-            if (v.requestPictureInPicture) {
-                await v.requestPictureInPicture();
-                resetIdleTimer();
-                return;
-            }
         }
-        sendFrameMessage({ type: 'AS_REQUEST_PIP' });
+
+        const animeTitle = State.currentAnime ? State.currentAnime.title : '';
+        const epNum = State.currentEpIndex !== undefined ? (State.currentEpIndex + 1) : 1;
+        const epTitle = `${t('modal.episode_single', 'Épisode')} ${epNum}`;
+        const fullTitle = animeTitle ? `${animeTitle} - ${epTitle}` : epTitle;
+
+        syncPlayerMediaMetadata();
+
+        if ('documentPictureInPicture' in window) {
+            try {
+                const pipWindow = await window.documentPictureInPicture.requestWindow({
+                    width: 720,
+                    height: 405
+                });
+                pipWindow.document.title = fullTitle;
+
+                const styleSheets = Array.from(document.styleSheets);
+                for (const sheet of styleSheets) {
+                    try {
+                        if (sheet.href) {
+                            const link = pipWindow.document.createElement('link');
+                            link.rel = 'stylesheet';
+                            link.href = sheet.href;
+                            pipWindow.document.head.appendChild(link);
+                        } else if (sheet.cssRules) {
+                            const style = pipWindow.document.createElement('style');
+                            for (const rule of sheet.cssRules) {
+                                style.appendChild(pipWindow.document.createTextNode(rule.cssText));
+                            }
+                            pipWindow.document.head.appendChild(style);
+                        }
+                    } catch (err) {}
+                }
+
+                const viewport = document.getElementById('netflixVideoViewport');
+                if (viewport) {
+                    const placeholder = document.createElement('div');
+                    placeholder.id = 'pipPlaceholder';
+                    placeholder.style.width = '100%';
+                    placeholder.style.height = '100%';
+                    placeholder.style.background = '#000';
+                    viewport.parentNode.insertBefore(placeholder, viewport);
+
+                    pipWindow.document.body.style.margin = '0';
+                    pipWindow.document.body.style.background = '#000';
+                    pipWindow.document.body.style.overflow = 'hidden';
+                    pipWindow.document.body.appendChild(viewport);
+
+                    pipWindow.addEventListener('pagehide', () => {
+                        const ph = document.getElementById('pipPlaceholder');
+                        if (ph && ph.parentNode) {
+                            ph.parentNode.insertBefore(viewport, ph);
+                            ph.remove();
+                        }
+                        resetIdleTimer();
+                    });
+                    resetIdleTimer();
+                    return;
+                }
+            } catch (err) {}
+        }
+
+        if (v && v.requestPictureInPicture) {
+            try {
+                const doc = v.ownerDocument || document;
+                if (doc) doc.title = fullTitle;
+                v.title = fullTitle;
+            } catch (e) {}
+            await v.requestPictureInPicture();
+            resetIdleTimer();
+            return;
+        }
+
+        sendFrameMessage({
+            type: 'AS_REQUEST_PIP',
+            animeTitle,
+            epTitle,
+            poster: State.currentAnime ? State.currentAnime.poster : ''
+        });
     } catch (e) {
-        sendFrameMessage({ type: 'AS_REQUEST_PIP' });
+        sendFrameMessage({
+            type: 'AS_REQUEST_PIP',
+            animeTitle: State.currentAnime ? State.currentAnime.title : '',
+            epTitle: `${t('modal.episode_single', 'Épisode')} ${(State.currentEpIndex || 0) + 1}`,
+            poster: State.currentAnime ? State.currentAnime.poster : ''
+        });
     }
     resetIdleTimer();
 }
