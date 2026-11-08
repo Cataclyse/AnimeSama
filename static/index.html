@@ -19,6 +19,93 @@
     <link rel="stylesheet" href="/css/responsive.css">
 </head>
 <body>
+    <div id="appUpdateOverlay" class="app-update-overlay" style="display: none;">
+        <div class="update-screen-container">
+            <div class="update-screen-header">
+                <div class="update-screen-brand">
+                    <img class="update-logo" src="https://anime-sama.to/img/opti/logo_banniere.webp" alt="Anime-Sama">
+                </div>
+                <div class="update-badge-pill" id="updateBadgePill">Mise à jour disponible</div>
+            </div>
+
+            <div class="update-screen-card">
+                <div class="update-hero-icon-wrap">
+                    <div class="update-icon-pulse"></div>
+                    <svg class="update-hero-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                </div>
+
+                <h1 class="update-screen-title" id="updateScreenTitle">Mise à jour en direct</h1>
+                <p class="update-screen-subtitle" id="updateScreenSubtitle">Une nouvelle version d'Anime-Sama est en cours d'installation...</p>
+
+                <div class="update-steps-list">
+                    <div class="update-step-item" id="updateStepCheck">
+                        <div class="update-step-icon">
+                            <svg class="step-check-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                            <div class="step-spinner"></div>
+                        </div>
+                        <div class="update-step-details">
+                            <span class="update-step-name">1. Recherche de mise à jour</span>
+                            <span class="update-step-desc" id="updateStepCheckDesc">Vérification de la dernière version</span>
+                        </div>
+                    </div>
+
+                    <div class="update-step-item" id="updateStepDownload">
+                        <div class="update-step-icon">
+                            <svg class="step-check-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                            <div class="step-spinner"></div>
+                        </div>
+                        <div class="update-step-details">
+                            <div class="update-step-header-row">
+                                <span class="update-step-name">2. Téléchargement des composants</span>
+                                <span class="update-step-value" id="updateStepDownloadValue">0%</span>
+                            </div>
+                            <span class="update-step-desc" id="updateStepDownloadDesc">Téléchargement en cours...</span>
+                        </div>
+                    </div>
+
+                    <div class="update-step-item" id="updateStepInstall">
+                        <div class="update-step-icon">
+                            <svg class="step-check-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                            <div class="step-spinner"></div>
+                        </div>
+                        <div class="update-step-details">
+                            <span class="update-step-name">3. Remplacement & Installation</span>
+                            <span class="update-step-desc" id="updateStepInstallDesc">En attente...</span>
+                        </div>
+                    </div>
+
+                    <div class="update-step-item" id="updateStepRestart">
+                        <div class="update-step-icon">
+                            <svg class="step-check-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                            <div class="step-spinner"></div>
+                        </div>
+                        <div class="update-step-details">
+                            <span class="update-step-name">4. Redémarrage de l'application</span>
+                            <span class="update-step-desc" id="updateStepRestartDesc">En attente...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="update-progress-section">
+                    <div class="update-progress-info">
+                        <span id="updateProgressText">Préparation...</span>
+                        <span id="updateProgressPercent">0%</span>
+                    </div>
+                    <div class="update-progress-track">
+                        <div class="update-progress-fill" id="updateProgressBar" style="width: 0%;"></div>
+                    </div>
+                </div>
+
+                <div class="update-screen-actions">
+                    <button type="button" class="btn-update-bypass" id="updateBypassBtn" onclick="dismissUpdateOverlay()">Passer et accéder au catalogue</button>
+                </div>
+            </div>
+        </div>
+    </div>
     
     <header class="main-nav" id="navbar">
         <div class="nav-left">

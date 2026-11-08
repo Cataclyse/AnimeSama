@@ -453,6 +453,11 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
             }
         }
 
+        ("GET", "/api/update/status") => {
+            let status = crate::update::get_update_progress();
+            respond_json(req, &json!(status).to_string());
+        }
+
         ("POST", "/api/update/open-release") => {
             let mut content = String::new();
             let _ = req.as_reader().read_to_string(&mut content);

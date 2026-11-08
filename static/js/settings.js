@@ -310,6 +310,195 @@ function checkForUpdatesManual() {
     checkForUpdates(false);
 }
 
+let updatePollInterval = null;
+
+function formatUpdateBytes(bytes) {
+    if (!bytes || bytes <= 0) return '0 Mo';
+    const mb = bytes / (1024 * 1024);
+    if (mb < 1) {
+        return (bytes / 1024).toFixed(0) + ' Ko';
+    }
+    return mb.toFixed(1) + ' Mo';
+}
+
+function dismissUpdateOverlay() {
+    if (updatePollInterval) {
+        clearInterval(updatePollInterval);
+        updatePollInterval = null;
+    }
+    const overlay = document.getElementById('appUpdateOverlay');
+    if (overlay) {
+        overlay.style.display = 'none';
+    }
+}
+
+function showUpdateOverlay(info) {
+    const overlay = document.getElementById('appUpdateOverlay');
+    if (!overlay) return;
+    overlay.style.display = 'flex';
+
+    const badge = document.getElementById('updateBadgePill');
+    if (badge && info.current_version && info.latest_version) {
+        badge.textContent = `v${info.current_version} → ${info.latest_version}`;
+    }
+
+    const checkStep = document.getElementById('updateStepCheck');
+    const checkDesc = document.getElementById('updateStepCheckDesc');
+    if (checkStep) {
+        checkStep.classList.remove('active');
+        checkStep.classList.add('done');
+    }
+    if (checkDesc && info.latest_version) {
+        checkDesc.textContent = `Version ${info.latest_version} détectée`;
+    }
+
+    const dlStep = document.getElementById('updateStepDownload');
+    if (dlStep) {
+        dlStep.classList.add('active');
+        dlStep.classList.remove('done');
+    }
+
+    const progBar = document.getElementById('updateProgressBar');
+    if (progBar) progBar.style.width = '0%';
+    const progText = document.getElementById('updateProgressText');
+    if (progText) progText.textContent = `Téléchargement de ${info.latest_version || 'la mise à jour'}...`;
+    const progPct = document.getElementById('updateProgressPercent');
+    if (progPct) progPct.textContent = '0%';
+}
+
+function startUpdateStepTracking(targetVersion) {
+    if (updatePollInterval) {
+        clearInterval(updatePollInterval);
+    }
+
+    updatePollInterval = setInterval(async () => {
+        try {
+            const res = await fetch('/api/update/status');
+            if (!res.ok) return;
+            const data = await res.json();
+
+            const checkStep = document.getElementById('updateStepCheck');
+            const dlStep = document.getElementById('updateStepDownload');
+            const installStep = document.getElementById('updateStepInstall');
+            const restartStep = document.getElementById('updateStepRestart');
+
+            const dlDesc = document.getElementById('updateStepDownloadDesc');
+            const dlVal = document.getElementById('updateStepDownloadValue');
+            const installDesc = document.getElementById('updateStepInstallDesc');
+            const restartDesc = document.getElementById('updateStepRestartDesc');
+
+            const progBar = document.getElementById('updateProgressBar');
+            const progText = document.getElementById('updateProgressText');
+            const progPct = document.getElementById('updateProgressPercent');
+            const bypassBtn = document.getElementById('updateBypassBtn');
+
+            if (checkStep) {
+                checkStep.classList.remove('active');
+                checkStep.classList.add('done');
+            }
+
+            if (data.step_index === 2) {
+                if (dlStep) {
+                    dlStep.classList.add('active');
+                    dlStep.classList.remove('done');
+                }
+                if (installStep) {
+                    installStep.classList.remove('active', 'done');
+                }
+                if (restartStep) {
+                    restartStep.classList.remove('active', 'done');
+                }
+
+                if (dlDesc) {
+                    if (data.total_bytes > 0) {
+                        dlDesc.textContent = `${formatUpdateBytes(data.bytes_downloaded)} / ${formatUpdateBytes(data.total_bytes)}`;
+                    } else {
+                        dlDesc.textContent = data.message || 'Téléchargement en cours...';
+                    }
+                }
+                if (dlVal) dlVal.textContent = `${data.percent}%`;
+                if (progPct) progPct.textContent = `${data.percent}%`;
+                if (progBar) progBar.style.width = `${data.percent}%`;
+                if (progText) progText.textContent = `Téléchargement de ${targetVersion || data.version || 'la mise à jour'}...`;
+            } else if (data.step_index === 3) {
+                if (dlStep) {
+                    dlStep.classList.remove('active');
+                    dlStep.classList.add('done');
+                }
+                if (dlVal) dlVal.textContent = '100%';
+                if (installStep) {
+                    installStep.classList.add('active');
+                    installStep.classList.remove('done');
+                }
+                if (restartStep) {
+                    restartStep.classList.remove('active', 'done');
+                }
+
+                if (installDesc) {
+                    installDesc.textContent = data.message || 'Remplacement des exécutables...';
+                }
+                if (progPct) progPct.textContent = '100%';
+                if (progBar) progBar.style.width = '100%';
+                if (progText) progText.textContent = 'Installation et finalisation...';
+            } else if (data.step_index >= 4) {
+                if (dlStep) {
+                    dlStep.classList.remove('active');
+                    dlStep.classList.add('done');
+                }
+                if (installStep) {
+                    installStep.classList.remove('active');
+                    installStep.classList.add('done');
+                }
+
+                if (data.step === 'done') {
+                    if (restartStep) {
+                        restartStep.classList.remove('active');
+                        restartStep.classList.add('done');
+                    }
+                    if (restartDesc) {
+                        restartDesc.textContent = 'Mise à jour terminée avec succès !';
+                    }
+                    if (progText) progText.textContent = 'Mise à jour prête !';
+                    if (bypassBtn) {
+                        bypassBtn.textContent = 'Entrer dans Anime-Sama';
+                        bypassBtn.style.color = '#46d369';
+                        bypassBtn.style.fontWeight = '700';
+                    }
+                    clearInterval(updatePollInterval);
+                    updatePollInterval = null;
+                } else {
+                    if (restartStep) {
+                        restartStep.classList.add('active');
+                        restartStep.classList.remove('done');
+                    }
+                    if (restartDesc) {
+                        restartDesc.textContent = data.message || 'Redémarrage de l\'application...';
+                    }
+                    if (progText) progText.textContent = 'Redémarrage imminent...';
+                }
+            }
+
+            if (data.step === 'error') {
+                clearInterval(updatePollInterval);
+                updatePollInterval = null;
+                if (progText) {
+                    progText.textContent = 'Erreur lors de la mise à jour';
+                    progText.style.color = '#ff4747';
+                }
+                if (installDesc) {
+                    installDesc.textContent = data.message;
+                    installDesc.style.color = '#ff4747';
+                }
+                if (bypassBtn) {
+                    bypassBtn.textContent = 'Fermer et accéder au catalogue';
+                    bypassBtn.style.color = '#ffffff';
+                }
+            }
+        } catch (e) {
+        }
+    }, 120);
+}
+
 async function applyUpdateDirect() {
     const applyBtn = document.getElementById('applyUpdateBtn');
     if (applyBtn) {
@@ -318,18 +507,16 @@ async function applyUpdateDirect() {
     }
 
     try {
+        if (currentUpdateInfo) {
+            showUpdateOverlay(currentUpdateInfo);
+            startUpdateStepTracking(currentUpdateInfo.latest_version);
+        }
         const res = await fetch('/api/update/apply', { method: 'POST' });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Erreur lors de la mise à jour');
 
-        showToast(data.message || t('settings.update_success', 'Mise à jour réussie ! Redémarrage...'));
-        const desc = document.getElementById('updateStatusDesc');
-        if (desc) {
-            desc.textContent = data.message;
-            desc.style.color = '#46d369';
-        }
-        if (data.latest_version) {
-            updateCurrentVersionDisplay(data.latest_version);
+        if (!currentUpdateInfo) {
+            showToast(data.message || t('settings.update_success', 'Mise à jour réussie ! Redémarrage...'));
         }
     } catch (e) {
         showToast(t('settings.update_error', 'Erreur de mise à jour') + ' : ' + e.message);
@@ -361,18 +548,10 @@ async function runAutoUpdateOnLaunch() {
         if (isPlayerActive()) return;
 
         currentUpdateInfo = data;
-        const applyRes = await fetch('/api/update/apply', { method: 'POST' });
-        const applyData = await applyRes.json();
-        if (applyRes.ok && applyData.success) {
-            if (data.latest_version) {
-                updateCurrentVersionDisplay(data.latest_version);
-            }
-            const desc = document.getElementById('updateStatusDesc');
-            if (desc) {
-                desc.textContent = applyData.message;
-                desc.style.color = '#46d369';
-            }
-        }
+        showUpdateOverlay(data);
+        startUpdateStepTracking(data.latest_version);
+
+        await fetch('/api/update/apply', { method: 'POST' });
     } catch (e) {
     }
 }
@@ -387,13 +566,13 @@ fetch('/api/settings')
         if (DOM.adShieldCheckbox) DOM.adShieldCheckbox.checked = d.ad_shield !== false;
         if (DOM.autoUpdateCheckbox) DOM.autoUpdateCheckbox.checked = d.auto_update !== false;
         if (d.version) updateCurrentVersionDisplay(d.version);
-    })
-    .catch(() => {});
 
-setTimeout(async () => {
-    if (appSettings.auto_update !== false) {
-        await runAutoUpdateOnLaunch();
-    } else {
-        checkForUpdates(true);
-    }
-}, 2500);
+        if (appSettings.auto_update !== false) {
+            runAutoUpdateOnLaunch();
+        } else {
+            checkForUpdates(true);
+        }
+    })
+    .catch(() => {
+        runAutoUpdateOnLaunch();
+    });

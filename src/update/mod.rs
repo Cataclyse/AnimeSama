@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Read;
+use std::sync::{Mutex, OnceLock};
 
 pub const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -83,6 +84,58 @@ pub struct UpdateApplyResult {
     pub message: String,
     pub needs_restart: bool,
     pub downloaded_file: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateProgress {
+    pub active: bool,
+    pub step: String,
+    pub step_index: u8,
+    pub total_steps: u8,
+    pub percent: u8,
+    pub bytes_downloaded: u64,
+    pub total_bytes: u64,
+    pub message: String,
+    pub version: String,
+}
+
+impl Default for UpdateProgress {
+    fn default() -> Self {
+        Self {
+            active: false,
+            step: "idle".to_string(),
+            step_index: 0,
+            total_steps: 4,
+            percent: 0,
+            bytes_downloaded: 0,
+            total_bytes: 0,
+            message: String::new(),
+            version: String::new(),
+        }
+    }
+}
+
+fn progress_storage() -> &'static Mutex<UpdateProgress> {
+    static STORAGE: OnceLock<Mutex<UpdateProgress>> = OnceLock::new();
+    STORAGE.get_or_init(|| Mutex::new(UpdateProgress::default()))
+}
+
+pub fn get_update_progress() -> UpdateProgress {
+    progress_storage().lock().unwrap().clone()
+}
+
+pub fn set_update_progress(step: &str, step_index: u8, percent: u8, downloaded: u64, total: u64, message: &str, version: &str) {
+    if let Ok(mut p) = progress_storage().lock() {
+        p.active = true;
+        p.step = step.to_string();
+        p.step_index = step_index;
+        p.total_steps = 4;
+        p.percent = percent;
+        p.bytes_downloaded = downloaded;
+        p.total_bytes = total;
+        p.message = message.to_string();
+        p.version = version.to_string();
+    }
 }
 
 pub fn parse_version(v: &str) -> Option<(u64, u64, u64)> {
@@ -274,7 +327,7 @@ pub fn check_for_updates() -> Result<UpdateInfo, String> {
     })
 }
 
-pub fn download_file(url: &str) -> Result<Vec<u8>, String> {
+pub fn download_file_with_progress(url: &str, version: &str) -> Result<Vec<u8>, String> {
     let agent = ureq::AgentBuilder::new()
         .timeout_connect(std::time::Duration::from_secs(10))
         .timeout_read(std::time::Duration::from_secs(120))
@@ -286,10 +339,67 @@ pub fn download_file(url: &str) -> Result<Vec<u8>, String> {
         .call()
         .map_err(|e| format!("Erreur lors du téléchargement: {}", e))?;
 
+    let total_bytes: u64 = resp
+        .header("Content-Length")
+        .and_then(|h| h.parse::<u64>().ok())
+        .unwrap_or(0);
+
+    set_update_progress(
+        "downloading",
+        2,
+        0,
+        0,
+        total_bytes,
+        "Téléchargement en cours...",
+        version,
+    );
+
+    let mut reader = resp.into_reader();
     let mut bytes = Vec::new();
-    resp.into_reader()
-        .read_to_end(&mut bytes)
-        .map_err(|e| format!("Erreur de lecture du flux: {}", e))?;
+    let mut buffer = [0u8; 65536];
+    let mut downloaded: u64 = 0;
+    let mut last_percent: u8 = 0;
+
+    loop {
+        let n = reader
+            .read(&mut buffer)
+            .map_err(|e| format!("Erreur de lecture du flux: {}", e))?;
+        if n == 0 {
+            break;
+        }
+        bytes.extend_from_slice(&buffer[..n]);
+        downloaded += n as u64;
+
+        let percent = if total_bytes > 0 {
+            let p = ((downloaded as f64 / total_bytes as f64) * 100.0) as u8;
+            p.min(100)
+        } else {
+            50
+        };
+
+        if percent != last_percent || downloaded == total_bytes {
+            last_percent = percent;
+            set_update_progress(
+                "downloading",
+                2,
+                percent,
+                downloaded,
+                total_bytes,
+                "Téléchargement en cours...",
+                version,
+            );
+        }
+    }
+
+    set_update_progress(
+        "downloading",
+        2,
+        100,
+        downloaded,
+        if total_bytes > 0 { total_bytes } else { downloaded },
+        "Téléchargement terminé.",
+        version,
+    );
 
     Ok(bytes)
 }
@@ -317,9 +427,42 @@ fn schedule_delayed_exit() {
 
 pub fn apply_update() -> Result<UpdateApplyResult, String> {
     if cfg!(debug_assertions) {
+        let update_info = check_for_updates().unwrap_or(UpdateInfo {
+            current_version: CURRENT_VERSION.to_string(),
+            latest_version: "v0.1.29".to_string(),
+            update_available: true,
+            release_name: "Anime-Sama Desktop (Simulation)".to_string(),
+            release_notes: String::new(),
+            release_url: String::new(),
+            download_url: None,
+            asset_name: None,
+            install_kind: "windows_standalone".to_string(),
+        });
+        let version = update_info.latest_version.clone();
+
+        std::thread::spawn(move || {
+            set_update_progress("checking", 1, 100, 0, 0, "Vérification terminée", &version);
+            std::thread::sleep(std::time::Duration::from_millis(350));
+
+            let total: u64 = 42_500_000;
+            for pct in (0..=100).step_by(5) {
+                let downloaded = (total * pct as u64) / 100;
+                set_update_progress("downloading", 2, pct as u8, downloaded, total, "Téléchargement des fichiers en cours...", &version);
+                std::thread::sleep(std::time::Duration::from_millis(80));
+            }
+
+            set_update_progress("installing", 3, 100, total, total, "Installation et remplacement des fichiers...", &version);
+            std::thread::sleep(std::time::Duration::from_millis(1200));
+
+            set_update_progress("restart", 4, 100, total, total, "Redémarrage de l'application...", &version);
+            std::thread::sleep(std::time::Duration::from_millis(1200));
+
+            set_update_progress("done", 4, 100, total, total, "Mise à jour terminée avec succès.", &version);
+        });
+
         return Ok(UpdateApplyResult {
             success: true,
-            message: "Mise à jour désactivée en mode développement.".to_string(),
+            message: "Simulation de mise à jour lancée (mode dev).".to_string(),
             needs_restart: false,
             downloaded_file: None,
         });
@@ -336,7 +479,7 @@ pub fn apply_update() -> Result<UpdateApplyResult, String> {
     }
 
     let download_url = match &update_info.download_url {
-        Some(u) => u,
+        Some(u) => u.clone(),
         None => {
             let _ = opener::open(&update_info.release_url);
             return Ok(UpdateApplyResult {
@@ -348,135 +491,142 @@ pub fn apply_update() -> Result<UpdateApplyResult, String> {
         }
     };
 
+    let latest_version = update_info.latest_version.clone();
     let asset_name = update_info.asset_name.clone().unwrap_or_else(|| "update.bin".to_string());
-    let bytes = download_file(download_url)?;
 
-    if asset_name.ends_with(".deb") {
-        let temp_dir = std::env::temp_dir();
-        let target = temp_dir.join(&asset_name);
-        fs::write(&target, &bytes).map_err(|e| format!("Échec d'écriture du fichier: {}", e))?;
-        let _ = opener::open(&target);
-        return Ok(UpdateApplyResult {
-            success: true,
-            message: format!("Paquet {} téléchargé dans {}.", asset_name, target.display()),
-            needs_restart: true,
-            downloaded_file: Some(target.to_string_lossy().to_string()),
-        });
-    }
+    std::thread::spawn(move || {
+        set_update_progress("checking", 1, 100, 0, 0, "Vérification terminée", &latest_version);
+        std::thread::sleep(std::time::Duration::from_millis(200));
 
-    if cfg!(target_os = "windows") && asset_name.to_lowercase().contains("setup") {
-        let temp_dir = std::env::temp_dir();
-        let target = temp_dir.join(&asset_name);
-        fs::write(&target, &bytes).map_err(|e| format!("Échec d'écriture du fichier: {}", e))?;
-
-        #[cfg(target_os = "windows")]
-        {
-            use std::os::windows::process::CommandExt;
-            const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-            let _ = std::process::Command::new(&target)
-                .args(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/FORCECLOSEAPPLICATIONS"])
-                .creation_flags(CREATE_NO_WINDOW)
-                .spawn();
-        }
-
-        schedule_delayed_exit();
-
-        return Ok(UpdateApplyResult {
-            success: true,
-            message: format!("Installateur {} exécuté silencieusement. Redémarrage...", asset_name),
-            needs_restart: true,
-            downloaded_file: Some(target.to_string_lossy().to_string()),
-        });
-    }
-
-    let current_exe = match std::env::current_exe() {
-        Ok(p) => p,
-        Err(_) => {
-            let temp_dir = std::env::temp_dir();
-            let target = temp_dir.join(&asset_name);
-            fs::write(&target, &bytes).map_err(|e| format!("Échec d'écriture: {}", e))?;
-            let _ = opener::open(&target);
-            return Ok(UpdateApplyResult {
-                success: true,
-                message: format!("Fichier téléchargé dans {}. Veuillez l'exécuter.", target.display()),
-                needs_restart: false,
-                downloaded_file: Some(target.to_string_lossy().to_string()),
-            });
-        }
-    };
-
-    if cfg!(target_os = "windows") {
-        let clean_exe = if let Some(stripped) = current_exe.to_str().and_then(|s| s.strip_prefix(r"\\?\")) {
-            std::path::PathBuf::from(stripped)
-        } else {
-            current_exe.clone()
+        let bytes = match download_file_with_progress(&download_url, &latest_version) {
+            Ok(b) => b,
+            Err(e) => {
+                set_update_progress("error", 2, 0, 0, 0, &format!("Échec du téléchargement: {}", e), &latest_version);
+                return;
+            }
         };
-        let old_exe = clean_exe.with_extension("exe.old");
-        let _ = fs::remove_file(&old_exe);
-        if let Err(_e) = fs::rename(&clean_exe, &old_exe) {
+
+        set_update_progress("installing", 3, 100, bytes.len() as u64, bytes.len() as u64, "Installation des fichiers...", &latest_version);
+
+        if asset_name.ends_with(".deb") {
             let temp_dir = std::env::temp_dir();
             let target = temp_dir.join(&asset_name);
-            fs::write(&target, &bytes).map_err(|err| format!("Échec d'écriture: {}", err))?;
+            if let Err(e) = fs::write(&target, &bytes) {
+                set_update_progress("error", 3, 0, 0, 0, &format!("Échec d'écriture: {}", e), &latest_version);
+                return;
+            }
             let _ = opener::open(&target);
-            return Ok(UpdateApplyResult {
-                success: true,
-                message: format!("Mise à jour téléchargée: {}. Veuillez relancer.", target.display()),
-                needs_restart: true,
-                downloaded_file: Some(target.to_string_lossy().to_string()),
-            });
-        }
-        if let Err(e) = fs::write(&clean_exe, &bytes) {
-            let _ = fs::rename(&old_exe, &clean_exe);
-            return Err(format!("Échec du remplacement de l'exécutable: {}", e));
+            set_update_progress("restart", 4, 100, bytes.len() as u64, bytes.len() as u64, "Paquet prêt. Installation lancée.", &latest_version);
+            return;
         }
 
-        #[cfg(target_os = "windows")]
-        {
-            use std::os::windows::process::CommandExt;
-            const CREATE_NO_WINDOW: u32 = 0x08000000;
-            let _ = std::process::Command::new(&clean_exe)
-                .creation_flags(CREATE_NO_WINDOW)
-                .spawn();
+        if cfg!(target_os = "windows") && asset_name.to_lowercase().contains("setup") {
+            let temp_dir = std::env::temp_dir();
+            let target = temp_dir.join(&asset_name);
+            if let Err(e) = fs::write(&target, &bytes) {
+                set_update_progress("error", 3, 0, 0, 0, &format!("Échec d'écriture: {}", e), &latest_version);
+                return;
+            }
+
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                const CREATE_NO_WINDOW: u32 = 0x08000000;
+                let _ = std::process::Command::new(&target)
+                    .args(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/FORCECLOSEAPPLICATIONS"])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .spawn();
+            }
+
+            set_update_progress("restart", 4, 100, bytes.len() as u64, bytes.len() as u64, "Redémarrage de l'application...", &latest_version);
+            schedule_delayed_exit();
+            return;
         }
 
-        schedule_delayed_exit();
+        let current_exe = match std::env::current_exe() {
+            Ok(p) => p,
+            Err(e) => {
+                set_update_progress("error", 3, 0, 0, 0, &format!("Impossible de localiser l'exécutable: {}", e), &latest_version);
+                return;
+            }
+        };
 
-        Ok(UpdateApplyResult {
-            success: true,
-            message: format!("Mise à jour vers {} réussie ! Redémarrage de l'application...", update_info.latest_version),
-            needs_restart: true,
-            downloaded_file: Some(clean_exe.to_string_lossy().to_string()),
-        })
-    } else {
-        let temp_exe = current_exe.with_extension("new");
-        fs::write(&temp_exe, &bytes).map_err(|e| format!("Échec d'écriture: {}", e))?;
+        if cfg!(target_os = "windows") {
+            let clean_exe = if let Some(stripped) = current_exe.to_str().and_then(|s| s.strip_prefix(r"\\?\")) {
+                std::path::PathBuf::from(stripped)
+            } else {
+                current_exe.clone()
+            };
+            let old_exe = clean_exe.with_extension("exe.old");
+            let _ = fs::remove_file(&old_exe);
+            if let Err(_e) = fs::rename(&clean_exe, &old_exe) {
+                let temp_dir = std::env::temp_dir();
+                let target = temp_dir.join(&asset_name);
+                if let Err(err) = fs::write(&target, &bytes) {
+                    set_update_progress("error", 3, 0, 0, 0, &format!("Échec d'écriture: {}", err), &latest_version);
+                    return;
+                }
+                let _ = opener::open(&target);
+                set_update_progress("restart", 4, 100, bytes.len() as u64, bytes.len() as u64, "Mise à jour prête. Relancez l'application.", &latest_version);
+                return;
+            }
 
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = fs::set_permissions(&temp_exe, fs::Permissions::from_mode(0o755));
+            if let Err(e) = fs::write(&clean_exe, &bytes) {
+                let _ = fs::rename(&old_exe, &clean_exe);
+                set_update_progress("error", 3, 0, 0, 0, &format!("Échec de remplacement: {}", e), &latest_version);
+                return;
+            }
+
+            set_update_progress("restart", 4, 100, bytes.len() as u64, bytes.len() as u64, "Redémarrage de l'application...", &latest_version);
+
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                const CREATE_NO_WINDOW: u32 = 0x08000000;
+                let _ = std::process::Command::new(&clean_exe)
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .spawn();
+            }
+
+            schedule_delayed_exit();
+        } else {
+            let temp_exe = current_exe.with_extension("new");
+            if let Err(e) = fs::write(&temp_exe, &bytes) {
+                set_update_progress("error", 3, 0, 0, 0, &format!("Échec d'écriture: {}", e), &latest_version);
+                return;
+            }
+
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = fs::set_permissions(&temp_exe, fs::Permissions::from_mode(0o755));
+            }
+
+            if let Err(e) = fs::rename(&temp_exe, &current_exe) {
+                set_update_progress("error", 3, 0, 0, 0, &format!("Échec de renommage: {}", e), &latest_version);
+                return;
+            }
+
+            set_update_progress("restart", 4, 100, bytes.len() as u64, bytes.len() as u64, "Redémarrage de l'application...", &latest_version);
+
+            #[cfg(target_os = "linux")]
+            {
+                let exe_clone = current_exe.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(600));
+                    std::process::Command::new(&exe_clone).spawn().ok();
+                    std::process::exit(0);
+                });
+            }
         }
+    });
 
-        fs::rename(&temp_exe, &current_exe).map_err(|e| format!("Échec du remplacement: {}", e))?;
-
-        #[cfg(target_os = "linux")]
-        {
-            let exe_clone = current_exe.clone();
-            std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::from_millis(600));
-                std::process::Command::new(&exe_clone).spawn().ok();
-                std::process::exit(0);
-            });
-        }
-
-        Ok(UpdateApplyResult {
-            success: true,
-            message: format!("Mise à jour vers {} appliquée avec succès ! Redémarrage...", update_info.latest_version),
-            needs_restart: true,
-            downloaded_file: Some(current_exe.to_string_lossy().to_string()),
-        })
-    }
+    Ok(UpdateApplyResult {
+        success: true,
+        message: "Mise à jour en cours d'application...".to_string(),
+        needs_restart: true,
+        downloaded_file: None,
+    })
 }
 
 #[cfg(test)]
