@@ -209,8 +209,6 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
                 let data = state.user_mgr.add_history(entry);
                 respond_json(req, &json!(data).to_string());
 
-                
-                
                 if data.auto_sync && state.auth.is_logged_in() {
                     let state = Arc::clone(&state);
                     thread::spawn(move || {
@@ -220,6 +218,20 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
             } else {
                 respond_error(req, 400, "Données d'historique invalides");
             }
+        }
+
+        ("POST", "/api/history/remove") => {
+            let mut content = String::new();
+            let _ = req.as_reader().read_to_string(&mut content);
+            let parsed: Result<serde_json::Value, _> = serde_json::from_str(&content);
+            if let Ok(val) = parsed {
+                if let Some(slug) = val.get("slug").and_then(|s| s.as_str()) {
+                    let data = state.user_mgr.remove_history(slug);
+                    respond_json(req, &json!(data).to_string());
+                    return;
+                }
+            }
+            respond_error(req, 400, "Paramètre 'slug' manquant");
         }
 
         ("GET", "/api/img") => {

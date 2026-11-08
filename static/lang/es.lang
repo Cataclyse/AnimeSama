@@ -223,3 +223,4 @@ player.filter_cinema=Cine
 player.filter_night=Modo Noche
 player.filters=Filtros visuales
 player.filter_auto=Auto / Dinámico
+row.remove_continue=Quitar de continuar viendo

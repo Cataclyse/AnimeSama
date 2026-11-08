@@ -487,6 +487,37 @@
     filter: brightness(0.9);
 }
 
+.continue-remove-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: rgba(18, 18, 18, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #eee;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity 0.2s ease, background 0.2s ease, transform 0.2s ease, color 0.2s ease;
+    backdrop-filter: blur(4px);
+}
+
+.continue-card:hover .continue-remove-btn {
+    opacity: 1;
+}
+
+.continue-remove-btn:hover {
+    background: #e50914;
+    border-color: #e50914;
+    color: #fff;
+    transform: scale(1.12);
+}
+
 .continue-play-overlay {
     position: absolute;
     inset: 0;

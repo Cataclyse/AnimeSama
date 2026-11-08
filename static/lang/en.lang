@@ -224,3 +224,4 @@ player.filter_cinema=Cinema
 player.filter_night=Night Mode
 player.filters=Visual Filters
 player.filter_auto=Auto / Dynamic
+row.remove_continue=Remove from continue watching

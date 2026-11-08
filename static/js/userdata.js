@@ -73,6 +73,54 @@ async function recordHistory(slug, epNumber) {
     } catch (e) {}
 }
 
+async function removeContinueItem(slug) {
+    if (!slug) return;
+    try {
+        localStorage.removeItem('as_progress_' + slug);
+        const prefix = `as_ep_progress_${slug}_`;
+        const toDelete = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith(prefix)) toDelete.push(k);
+        }
+        toDelete.forEach(k => localStorage.removeItem(k));
+    } catch (e) {}
+
+    try {
+        const res = await fetch('/api/history/remove', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slug: slug })
+        });
+        if (res.ok) {
+            const data = await res.json();
+            State.userData = data;
+        } else if (State.userData && State.userData.history) {
+            State.userData.history = State.userData.history.filter(h => h.slug !== slug);
+        }
+    } catch (e) {
+        if (State.userData && State.userData.history) {
+            State.userData.history = State.userData.history.filter(h => h.slug !== slug);
+        }
+    }
+
+    const card = document.querySelector(`.continue-card[data-slug="${slug}"]`);
+    if (card) {
+        card.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+        card.style.opacity = '0';
+        card.style.transform = 'scale(0.85)';
+        setTimeout(() => {
+            if (typeof renderContinueWatchingRow === 'function') {
+                renderContinueWatchingRow();
+            } else if (card.parentElement) {
+                card.remove();
+            }
+        }, 250);
+    } else if (typeof renderContinueWatchingRow === 'function') {
+        renderContinueWatchingRow();
+    }
+}
+
 function updateAppTitle(isPlaying) {
     if (isPlaying && State.currentAnime) {
         const title = State.currentAnime.title || State.currentAnime.slug;

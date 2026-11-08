@@ -223,3 +223,4 @@ player.filter_cinema=영화관
 player.filter_night=야간 모드
 player.filters=시각 필터
 player.filter_auto=자동 / 다이내믹
+row.remove_continue=이어보기에서 삭제

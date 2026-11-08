@@ -142,6 +142,15 @@ impl UserManager {
         snapshot
     }
 
+    pub fn remove_history(&self, slug: &str) -> UserData {
+        let mut d = self.data.lock().unwrap();
+        d.history.retain(|h| h.slug != slug);
+        let snapshot = d.clone();
+        drop(d);
+        self.save(&snapshot);
+        snapshot
+    }
+
     fn save(&self, data: &UserData) {
         if let Ok(json) = serde_json::to_string_pretty(data) {
             let _ = fs::write(&self.file_path, json);

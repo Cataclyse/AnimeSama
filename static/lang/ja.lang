@@ -223,3 +223,4 @@ player.filter_cinema=シネマ
 player.filter_night=ナイトモード
 player.filters=視覚フィルター
 player.filter_auto=自動 / ダイナミック
+row.remove_continue=続きから見るから削除

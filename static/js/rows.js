@@ -382,6 +382,9 @@ function createContinueCardHTML(c) {
         <div class="continue-card" data-slug="${c.slug}">
             <div class="continue-thumb-wrap" onclick="resumeAnimePlayback('${escapeHtml(c.slug)}', '${escapeHtml(c.season)}', ${c.episode - 1}, ${c.currentTime})">
                 <img class="continue-poster" src="/api/img?slug=${encodeURIComponent(c.slug)}" alt="${escapeHtml(c.title)}" loading="lazy" onerror="this.src='/api/img?slug=${encodeURIComponent(c.slug)}';" />
+                <button class="continue-remove-btn" onclick="event.stopPropagation(); removeContinueItem('${escapeHtml(c.slug)}');" title="${t('row.remove_continue', 'Retirer de la liste')}">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
                 <div class="continue-play-overlay">
                     <div class="continue-play-btn" title="${t('hero.resume', 'Reprendre')}">
                         <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21"></polygon></svg>

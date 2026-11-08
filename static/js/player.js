@@ -237,6 +237,23 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
         } catch (e) {}
         applyVideoFilter(savedFilter);
 
+        try {
+            const savedVolStr = localStorage.getItem('as_video_volume');
+            if (savedVolStr !== null) {
+                const parsedVol = parseFloat(savedVolStr);
+                if (!isNaN(parsedVol)) {
+                    playerState.volume = Math.max(0, Math.min(1, parsedVol));
+                }
+            }
+            const savedMuted = localStorage.getItem('as_video_muted');
+            if (savedMuted !== null) {
+                playerState.muted = savedMuted === '1';
+            }
+            sendFrameMessage({ type: 'AS_SET_VOLUME', volume: playerState.volume });
+            sendFrameMessage({ type: 'AS_SET_MUTED', muted: playerState.muted });
+            updateVolumeUI(playerState.volume, playerState.muted);
+        } catch (e) {}
+
         const prevBtn = document.getElementById('playerPrevBtn');
         const nextBtn = document.getElementById('playerNextBtn');
         if (prevBtn) prevBtn.disabled = episodeIndex <= 0;
@@ -510,6 +527,9 @@ function toggleMute() {
         sendFrameMessage({ type: 'AS_SET_MUTED', muted: newMuted });
     }
     playerState.muted = newMuted;
+    try {
+        localStorage.setItem('as_video_muted', newMuted ? '1' : '0');
+    } catch (e) {}
     updateVolumeUI(playerState.volume, newMuted);
     resetIdleTimer();
 }
@@ -527,6 +547,10 @@ function setVolume(val) {
     }
     playerState.volume = clamped;
     playerState.muted = clamped === 0;
+    try {
+        localStorage.setItem('as_video_volume', clamped.toString());
+        localStorage.setItem('as_video_muted', playerState.muted ? '1' : '0');
+    } catch (e) {}
     updateVolumeUI(clamped, playerState.muted);
     resetIdleTimer();
 }
