@@ -5,10 +5,14 @@ edition = "2021"
 authors = ["Cataclyse"]
 license = "MIT"
 
+[features]
+default = ["gui"]
+gui = ["dep:tao", "dep:wry"]
+
 [dependencies]
 tiny_http = "0.12"
-tao = { version = "0.37", features = ["rwh_06"] }
-wry = "0.57"
+tao = { version = "0.37", features = ["rwh_06"], optional = true }
+wry = { version = "0.57", optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 regex = "1.13"
