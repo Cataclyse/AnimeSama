@@ -111,11 +111,8 @@ pub fn init_discord_rpc() {
                                         _ => computed_start,
                                     };
                                     cached_start_ts = Some(start_ts);
-                                    let end_ts = start_ts + dur;
                                     act = act.timestamps(
-                                        activity::Timestamps::new()
-                                            .start(start_ts as i64)
-                                            .end(end_ts as i64),
+                                        activity::Timestamps::new().start(start_ts as i64),
                                     );
                                 }
                             }
