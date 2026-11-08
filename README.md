@@ -2,8 +2,6 @@
 
 A fast, lightweight native desktop application written in Rust that provides a Netflix-style interface for streaming anime, scans, and webtoons from Anime-Sama.
 
-![Anime-Sama Desktop](assets/preview.jpg)
-
 ## Features
 
 - **Netflix-Style Interface**: Hero billboard with featured titles, horizontal category rails, smooth navigation, and video trailer previews on hover with volume control.

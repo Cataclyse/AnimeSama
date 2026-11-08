@@ -80,16 +80,6 @@ jobs:
               </ul>
             </description>
             <launchable type="desktop-id">animesama.desktop</launchable>
-            <screenshots>
-              <screenshot type="default">
-                <caption>Interface d'accueil Netflix avec Hero Billboard et rails</caption>
-                <image>https://raw.githubusercontent.com/Cataclyse/AnimeSama/main/assets/preview.jpg</image>
-              </screenshot>
-              <screenshot>
-                <caption>Fiche détaillée avec sélection des saisons et épisodes</caption>
-                <image>https://raw.githubusercontent.com/Cataclyse/AnimeSama/main/assets/preview_modal.jpg</image>
-              </screenshot>
-            </screenshots>
             <url type="homepage">https://github.com/Cataclyse/AnimeSama</url>
             <url type="bugtracker">https://github.com/Cataclyse/AnimeSama/issues</url>
             <developer_name>Cataclyse</developer_name>
