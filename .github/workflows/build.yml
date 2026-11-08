@@ -264,6 +264,7 @@ jobs:
           name: Anime-Sama Desktop ${{ needs.version.outputs.tag }}
           draft: false
           prerelease: false
+          make_latest: true
           body_path: release-assets/release_body.md
           files: |
             release-assets/*

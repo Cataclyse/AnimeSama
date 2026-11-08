@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::Read;
 
 pub const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -24,7 +25,7 @@ pub struct UpdateApplyResult {
 }
 
 pub fn parse_version(v: &str) -> Option<(u64, u64, u64)> {
-    let clean = v.trim().trim_start_matches(|c| c == 'v' || c == 'V');
+    let clean = v.trim().trim_start_matches(|c| c == 'v' || c == 'V' || c == ' ');
     let parts: Vec<&str> = clean.split('.').collect();
     if parts.is_empty() {
         return None;
@@ -59,11 +60,13 @@ pub fn select_asset<'a>(assets: &'a [serde_json::Value]) -> Option<(&'a str, &'a
         };
 
         if is_windows {
-            if name == "animesama.exe" || name == "animesama-windows-x86_64.exe" {
+            if name.ends_with(".exe") && name.to_lowercase().contains("setup") {
                 return Some((name, download_url));
             }
-            if name.ends_with(".exe") && name.to_lowercase().contains("setup") && candidate.is_none() {
-                candidate = Some((name, download_url));
+            if name == "animesama.exe" || name == "animesama-windows-x86_64.exe" {
+                if candidate.is_none() {
+                    candidate = Some((name, download_url));
+                }
             }
             if name.ends_with(".zip") && name.contains("windows") && candidate.is_none() {
                 candidate = Some((name, download_url));
@@ -87,16 +90,47 @@ pub fn select_asset<'a>(assets: &'a [serde_json::Value]) -> Option<(&'a str, &'a
     candidate
 }
 
+fn update_agent() -> ureq::Agent {
+    ureq::AgentBuilder::new()
+        .timeout_connect(std::time::Duration::from_secs(6))
+        .timeout_read(std::time::Duration::from_secs(12))
+        .build()
+}
+
 pub fn check_for_updates() -> Result<UpdateInfo, String> {
+    let agent = update_agent();
     let api_url = "https://api.github.com/repos/Cataclyse/AnimeSama/releases/latest";
 
-    let resp = match ureq::get(api_url)
+    let mut body = match agent
+        .get(api_url)
         .set("User-Agent", "AnimeSama-Desktop-Updater")
         .set("Accept", "application/vnd.github.v3+json")
         .call()
     {
-        Ok(r) => r,
-        Err(ureq::Error::Status(404, _)) => {
+        Ok(r) => r.into_json::<serde_json::Value>().ok(),
+        Err(ureq::Error::Status(404, _)) => None,
+        Err(e) => return Err(format!("Erreur réseau lors de la vérification: {}", e)),
+    };
+
+    if body.is_none() {
+        let fallback_url = "https://api.github.com/repos/Cataclyse/AnimeSama/releases?per_page=1";
+        if let Ok(r) = agent
+            .get(fallback_url)
+            .set("User-Agent", "AnimeSama-Desktop-Updater")
+            .set("Accept", "application/vnd.github.v3+json")
+            .call()
+        {
+            if let Ok(serde_json::Value::Array(list)) = r.into_json() {
+                if let Some(first) = list.into_iter().next() {
+                    body = Some(first);
+                }
+            }
+        }
+    }
+
+    let body = match body {
+        Some(b) => b,
+        None => {
             return Ok(UpdateInfo {
                 current_version: CURRENT_VERSION.to_string(),
                 latest_version: CURRENT_VERSION.to_string(),
@@ -108,12 +142,7 @@ pub fn check_for_updates() -> Result<UpdateInfo, String> {
                 asset_name: None,
             });
         }
-        Err(e) => return Err(format!("Erreur réseau lors de la vérification: {}", e)),
     };
-
-    let body: serde_json::Value = resp
-        .into_json()
-        .map_err(|e| format!("Erreur de lecture de la réponse: {}", e))?;
 
     let tag_name = body
         .get("tag_name")
@@ -166,7 +195,13 @@ pub fn check_for_updates() -> Result<UpdateInfo, String> {
 }
 
 pub fn download_file(url: &str) -> Result<Vec<u8>, String> {
-    let resp = ureq::get(url)
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(std::time::Duration::from_secs(10))
+        .timeout_read(std::time::Duration::from_secs(120))
+        .build();
+
+    let resp = agent
+        .get(url)
         .set("User-Agent", "AnimeSama-Desktop-Updater")
         .call()
         .map_err(|e| format!("Erreur lors du téléchargement: {}", e))?;

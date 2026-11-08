@@ -200,7 +200,10 @@ async function checkForUpdates(silent = false) {
     }
 
     try {
-        const res = await fetch('/api/update/check');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 12000);
+        const res = await fetch('/api/update/check', { signal: controller.signal });
+        clearTimeout(timeoutId);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Erreur');
 
