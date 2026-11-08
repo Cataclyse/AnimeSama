@@ -27,7 +27,7 @@ function syncDiscordRpc(force = false) {
     const isPaused = !!playerState.paused;
     const currentStatus = isPaused ? 'paused' : 'playing';
     const epNum = State.currentEpIndex !== undefined ? (State.currentEpIndex + 1) : 1;
-    if (!force && lastDiscordRpcStatus === currentStatus && lastDiscordRpcEpisode === epNum && (now - lastDiscordRpcSend < 15000)) {
+    if (!force && lastDiscordRpcStatus === currentStatus && lastDiscordRpcEpisode === epNum) {
         return;
     }
     lastDiscordRpcSend = now;
@@ -448,7 +448,6 @@ function syncPlaybackState(currentTime, duration, bufferedEnd, paused, volume, m
     updateVolumeUI(playerState.volume, playerState.muted);
     checkSkipIntro(currentTime);
     checkNextEpisodePrompt(currentTime, playerState.duration);
-    syncDiscordRpc(false);
 }
 
 function renderScrubber(currentTime, duration, bufferedEnd) {
