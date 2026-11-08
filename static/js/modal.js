@@ -326,6 +326,14 @@ async function openDetailModal(slug) {
             }
         }
 
+        let savedLang = null;
+        try {
+            savedLang = localStorage.getItem(`as_lang_${anime.slug}`) || localStorage.getItem('as_last_selected_lang');
+        } catch (e) {}
+        if (savedLang) {
+            State.selectedLanguage = savedLang.toLowerCase();
+        }
+
         DOM.modalSeasonSelect.value = targetSeasonPath;
         const initialPath = getSeasonPathForLang(targetSeasonPath, State.selectedLanguage);
         await loadSeasonEpisodes(anime.slug, initialPath);
@@ -348,6 +356,10 @@ function switchModalLanguage(newLang) {
     const seasonBase = (State.currentEpisodes ? State.currentEpisodes.season : seasonSelectVal).split('/')[0];
     const newPath = `${seasonBase}/${newLang.toLowerCase()}`;
     State.selectedLanguage = newLang.toLowerCase();
+    try {
+        localStorage.setItem(`as_lang_${State.currentAnime.slug}`, State.selectedLanguage);
+        localStorage.setItem('as_last_selected_lang', State.selectedLanguage);
+    } catch (e) {}
     loadSeasonEpisodes(State.currentAnime.slug, newPath);
 }
 

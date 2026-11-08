@@ -183,11 +183,18 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
         const currentServerEl = document.getElementById('netflixCurrentServer');
 
         if (titleEl) titleEl.textContent = State.currentAnime ? State.currentAnime.title : slug;
-        if (epTitleEl) epTitleEl.textContent = `${t('modal.episode_single', 'Épisode')} ${episodeIndex + 1}`;
+        const currentSeasonBase = (State.currentEpisodes.season || 'saison1').split('/')[0];
+        const formattedSeason = formatSeasonLabel(currentSeasonBase);
+        if (epTitleEl) epTitleEl.textContent = `${formattedSeason} • ${t('modal.episode_single', 'Épisode')} ${episodeIndex + 1}`;
 
         const currentLang = (State.currentEpisodes.season.split('/')[1] || 'vostfr').toUpperCase();
         if (currentLangEl) currentLangEl.textContent = currentLang;
         if (currentServerEl) currentServerEl.textContent = State.selectedPlayer;
+        State.selectedLanguage = currentLang.toLowerCase();
+        try {
+            localStorage.setItem(`as_lang_${slug}`, State.selectedLanguage);
+            localStorage.setItem('as_last_selected_lang', State.selectedLanguage);
+        } catch (e) {}
 
         let proxyUrl = toProxyUrl(videoUrl);
         if (!proxyUrl) {
@@ -1191,6 +1198,10 @@ function switchPlayerLanguage(newLang) {
     const seasonBase = currentSeason.split('/')[0] || 'saison1';
     const newPath = `${seasonBase}/${newLang.toLowerCase()}`;
     State.selectedLanguage = newLang.toLowerCase();
+    try {
+        localStorage.setItem(`as_lang_${State.currentEpisodes.slug}`, State.selectedLanguage);
+        localStorage.setItem('as_last_selected_lang', State.selectedLanguage);
+    } catch (e) {}
 
     const currentLangEl = document.getElementById('netflixCurrentLang');
     if (currentLangEl) currentLangEl.textContent = newLang.toUpperCase();
