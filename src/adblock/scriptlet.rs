@@ -875,6 +875,12 @@ div[class*="cf-turnstile" i] {{
             if (v && !isNaN(rate)) {{
                 try {{ v.playbackRate = rate; }} catch(err) {{}}
             }}
+        }} else if (ev.data.type === 'AS_REQUEST_PIP') {{
+            if (document.pictureInPictureElement) {{
+                try {{ document.exitPictureInPicture().catch(function(){{}}); }} catch(err) {{}}
+            }} else if (v && v.requestPictureInPicture) {{
+                try {{ v.requestPictureInPicture().catch(function(){{}}); }} catch(err) {{}}
+            }}
         }}
     }});
 }})();
@@ -1092,6 +1098,12 @@ pub fn generate_resume_only_script(resume_seconds: f64, episode_num: u32) -> Str
             var rate = parseFloat(ev.data.rate);
             if (v && !isNaN(rate)) {{
                 try {{ v.playbackRate = rate; }} catch(err) {{}}
+            }}
+        }} else if (ev.data.type === 'AS_REQUEST_PIP') {{
+            if (document.pictureInPictureElement) {{
+                try {{ document.exitPictureInPicture().catch(function(){{}}); }} catch(err) {{}}
+            }} else if (v && v.requestPictureInPicture) {{
+                try {{ v.requestPictureInPicture().catch(function(){{}}); }} catch(err) {{}}
             }}
         }}
     }});

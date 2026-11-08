@@ -333,7 +333,8 @@ function toggleMute() {
 
 function setVolume(val) {
     const v = getIframeVideo();
-    const clamped = Math.max(0, Math.min(1, parseFloat(val)));
+    const parsed = parseFloat(val);
+    const clamped = isNaN(parsed) ? 1 : Math.max(0, Math.min(1, Math.round(parsed * 100) / 100));
     if (v) {
         v.volume = clamped;
         v.muted = clamped === 0;
@@ -358,7 +359,9 @@ function updateVolumeUI(vol, muted) {
         muteIcon.style.display = isMuted ? 'block' : 'none';
     }
     if (slider) {
-        slider.value = isMuted ? 0 : vol;
+        const displayVal = isMuted ? 0 : vol;
+        slider.value = displayVal;
+        slider.style.setProperty('--vol-pct', `${Math.round(displayVal * 100)}%`);
     }
 }
 
@@ -511,10 +514,25 @@ function selectServerFromModal(newPlayer) {
     switchLecteur(newPlayer);
 }
 
+function formatSeasonLabel(raw) {
+    if (!raw) return 'Saison 1';
+    const base = raw.split('/')[0].toLowerCase();
+    if (base.includes('film')) return 'Film';
+    if (base.includes('oav') || base.includes('ova')) return 'OAV';
+    if (base.includes('special')) return 'Spécial';
+    const num = base.replace(/[^0-9]/g, '');
+    return num ? `Saison ${num}` : (base.charAt(0).toUpperCase() + base.slice(1));
+}
+
 function toggleEpisodeDrawer() {
     const drawer = document.getElementById('netflixEpisodesDrawer');
     if (!drawer) return;
-    const isHidden = drawer.style.display === 'none';
+    const audioModal = document.getElementById('netflixAudioSubModal');
+    if (audioModal) audioModal.style.display = 'none';
+    const speedMenu = document.getElementById('netflixSpeedMenu');
+    if (speedMenu) speedMenu.style.display = 'none';
+
+    const isHidden = drawer.style.display === 'none' || !drawer.style.display;
     if (isHidden) {
         renderEpisodeDrawer();
         drawer.style.display = 'block';
@@ -525,18 +543,21 @@ function toggleEpisodeDrawer() {
 }
 
 function renderEpisodeDrawer() {
-    if (!State.currentEpisodes || !State.selectedPlayer) return;
+    const grid = document.getElementById('netflixDrawerGrid');
+    if (!grid) return;
+
+    if (!State.currentEpisodes || !State.selectedPlayer) {
+        grid.innerHTML = '<div class="netflix-drawer-empty">Aucun épisode disponible</div>';
+        return;
+    }
 
     const urls = State.currentEpisodes.players[State.selectedPlayer] || [];
-    const seasonName = formatSeasonName(State.currentEpisodes.season.split('/')[0] || 'saison1');
+    const seasonName = formatSeasonLabel(State.currentEpisodes.season);
 
     const seasonTitle = document.getElementById('netflixDrawerSeasonTitle');
     const countEl = document.getElementById('netflixDrawerCount');
     if (seasonTitle) seasonTitle.textContent = seasonName;
-    if (countEl) countEl.textContent = `${urls.length} épisodes`;
-
-    const grid = document.getElementById('netflixDrawerGrid');
-    if (!grid) return;
+    if (countEl) countEl.textContent = `${urls.length} épisode${urls.length > 1 ? 's' : ''}`;
 
     const slug = State.currentEpisodes.slug;
     grid.innerHTML = urls.map((url, i) => {
@@ -552,6 +573,13 @@ function renderEpisodeDrawer() {
             </div>
         `;
     }).join('');
+
+    setTimeout(() => {
+        const activeCard = grid.querySelector('.netflix-drawer-card.active');
+        if (activeCard) {
+            activeCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, 50);
 }
 
 function selectEpisodeFromDrawer(index) {
@@ -559,20 +587,63 @@ function selectEpisodeFromDrawer(index) {
     openEpisodePlayer(State.currentEpisodes.slug, State.currentEpisodes.season, index, null);
 }
 
-function toggleFullscreen() {
-    const container = document.getElementById('netflixPlayerContainer') || document.documentElement;
+async function togglePictureInPicture() {
+    try {
+        if (document.pictureInPictureElement) {
+            await document.exitPictureInPicture();
+            resetIdleTimer();
+            return;
+        }
+        const v = getIframeVideo();
+        if (v) {
+            const doc = v.ownerDocument || document;
+            if (doc.pictureInPictureElement) {
+                await doc.exitPictureInPicture();
+                resetIdleTimer();
+                return;
+            }
+            if (v.requestPictureInPicture) {
+                await v.requestPictureInPicture();
+                resetIdleTimer();
+                return;
+            }
+        }
+        sendFrameMessage({ type: 'AS_REQUEST_PIP' });
+    } catch (e) {
+        sendFrameMessage({ type: 'AS_REQUEST_PIP' });
+    }
+    resetIdleTimer();
+}
+
+function updateFullscreenIcons() {
+    const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement || document.body.classList.contains('native-fullscreen'));
     const expandIcon = document.querySelector('#netflixFullscreenBtn .icon-expand');
     const compressIcon = document.querySelector('#netflixFullscreenBtn .icon-compress');
+    if (expandIcon && compressIcon) {
+        expandIcon.style.display = isFs ? 'none' : 'block';
+        compressIcon.style.display = isFs ? 'block' : 'none';
+    }
+}
 
-    if (!document.fullscreenElement) {
+function toggleFullscreen() {
+    const isWry = window.ipc && typeof window.ipc.postMessage === 'function';
+    if (isWry) {
+        window.ipc.postMessage('toggle_fullscreen');
+        document.body.classList.toggle('native-fullscreen');
+    }
+
+    const container = document.getElementById('playerModal') || document.getElementById('netflixPlayerContainer') || document.documentElement;
+    const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+
+    if (!isFs) {
         if (container.requestFullscreen) {
-            container.requestFullscreen().catch(() => {});
+            container.requestFullscreen().catch(() => {
+                document.documentElement.requestFullscreen().catch(() => {});
+            });
         } else if (container.webkitRequestFullscreen) {
             container.webkitRequestFullscreen();
-        }
-        if (expandIcon && compressIcon) {
-            expandIcon.style.display = 'none';
-            compressIcon.style.display = 'block';
+        } else if (document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen().catch(() => {});
         }
     } else {
         if (document.exitFullscreen) {
@@ -580,11 +651,9 @@ function toggleFullscreen() {
         } else if (document.webkitExitFullscreen) {
             document.webkitExitFullscreen();
         }
-        if (expandIcon && compressIcon) {
-            expandIcon.style.display = 'block';
-            compressIcon.style.display = 'none';
-        }
+        document.body.classList.remove('native-fullscreen');
     }
+    updateFullscreenIcons();
     resetIdleTimer();
 }
 
@@ -640,6 +709,12 @@ function switchPlayerLanguage(newLang) {
 }
 
 function changeEpisode(delta) {
+    if (playerState.isChangingEpisode) return;
+    playerState.isChangingEpisode = true;
+    setTimeout(() => {
+        playerState.isChangingEpisode = false;
+    }, 400);
+
     flushCurrentPlayback();
     clearInterval(playerState.nextCountdownTimer);
     const newIdx = State.currentEpIndex + delta;
@@ -656,9 +731,18 @@ function closePlayerModal() {
     stopPlayerPolling();
     clearInterval(playerState.nextCountdownTimer);
 
-    if (document.fullscreenElement) {
-        try { document.exitFullscreen(); } catch (e) {}
+    if (window.ipc && typeof window.ipc.postMessage === 'function') {
+        window.ipc.postMessage('exit_fullscreen');
     }
+    document.body.classList.remove('native-fullscreen');
+
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+        try {
+            if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+        } catch (e) {}
+    }
+    updateFullscreenIcons();
 
     const modal = document.getElementById('playerModal');
     if (modal) modal.classList.remove('open');
@@ -768,12 +852,32 @@ function initNetflixPlayerEvents() {
         });
     }
 
+    const volWrap = document.querySelector('.netflix-volume-wrap');
     const volSlider = document.getElementById('netflixVolSlider');
     if (volSlider) {
         volSlider.addEventListener('input', (e) => {
             setVolume(e.target.value);
         });
+        volSlider.addEventListener('change', (e) => {
+            setVolume(e.target.value);
+        });
+        volSlider.addEventListener('mousedown', () => {
+            if (volWrap) volWrap.classList.add('active');
+        });
     }
+    if (volWrap) {
+        volWrap.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = e.deltaY < 0 ? 0.05 : -0.05;
+            setVolume(playerState.volume + delta);
+        }, { passive: false });
+    }
+    window.addEventListener('mouseup', () => {
+        if (volWrap) volWrap.classList.remove('active');
+    });
+
+    document.addEventListener('fullscreenchange', updateFullscreenIcons);
+    document.addEventListener('webkitfullscreenchange', updateFullscreenIcons);
 
     window.addEventListener('message', (ev) => {
         if (!ev.data) return;
@@ -828,6 +932,9 @@ function initNetflixPlayerEvents() {
         } else if (e.key === 'f' || e.key === 'F') {
             e.preventDefault();
             toggleFullscreen();
+        } else if (e.key === 'p' || e.key === 'P') {
+            e.preventDefault();
+            togglePictureInPicture();
         } else if (e.key === 's' || e.key === 'S') {
             const skipBtn = document.getElementById('netflixSkipIntroBtn');
             if (skipBtn && skipBtn.style.display !== 'none') {

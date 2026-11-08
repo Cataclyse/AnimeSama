@@ -54,48 +54,12 @@ function setupEventListeners() {
         if (e.target === DOM.detailModal) closeDetailModal();
     });
 
-    
-    DOM.playerCloseBtn.addEventListener('click', closePlayerModal);
-    DOM.playerPrevBtn.addEventListener('click', () => changeEpisode(-1));
-    DOM.playerNextBtn.addEventListener('click', () => changeEpisode(1));
-
-    
     document.addEventListener('keydown', (e) => {
-        if (DOM.playerModal && DOM.playerModal.classList.contains('open')) {
-            const tag = (e.target && e.target.tagName || '').toUpperCase();
-            if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target && e.target.isContentEditable)) {
-                return;
-            }
+        if (!DOM.playerModal || !DOM.playerModal.classList.contains('open')) {
             if (e.key === 'Escape') {
-                closePlayerModal();
-                return;
-            }
-            if (e.code === 'Space' || e.key === ' ' || e.key === 'k' || e.key === 'K') {
-                e.preventDefault();
-                try {
-                    DOM.videoIframe.contentWindow.postMessage({ type: 'AS_TOGGLE_PLAY' }, '*');
-                } catch(err) {}
-                return;
-            }
-            if (e.code === 'ArrowLeft' || e.key === 'ArrowLeft') {
-                e.preventDefault();
-                try {
-                    DOM.videoIframe.contentWindow.postMessage({ type: 'AS_SEEK_RELATIVE', delta: -5 }, '*');
-                } catch(err) {}
-                return;
-            }
-            if (e.code === 'ArrowRight' || e.key === 'ArrowRight') {
-                e.preventDefault();
-                try {
-                    DOM.videoIframe.contentWindow.postMessage({ type: 'AS_SEEK_RELATIVE', delta: 5 }, '*');
-                } catch(err) {}
-                return;
-            }
-        } else {
-            if (e.key === 'Escape') {
-                if (DOM.detailModal.classList.contains('open')) {
+                if (DOM.detailModal && DOM.detailModal.classList.contains('open')) {
                     closeDetailModal();
-                } else if (DOM.accountModal.classList.contains('open')) {
+                } else if (DOM.accountModal && DOM.accountModal.classList.contains('open')) {
                     closeAccountModal();
                 }
             }

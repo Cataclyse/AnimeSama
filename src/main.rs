@@ -13,7 +13,7 @@ use std::net::TcpListener;
 use tao::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    window::WindowBuilder,
+    window::{Fullscreen, WindowBuilder},
 };
 #[cfg(feature = "gui")]
 use wry::WebViewBuilder;
@@ -101,11 +101,25 @@ fn main() {
 
         let window = std::sync::Arc::new(window);
         let window_title = std::sync::Arc::clone(&window);
+        let window_ipc = std::sync::Arc::clone(&window);
 
         let _webview = match WebViewBuilder::new()
             .with_url(&app_url)
             .with_document_title_changed_handler(move |title| {
                 window_title.set_title(&title);
+            })
+            .with_ipc_handler(move |req| {
+                let msg = req.body().trim();
+                if msg == "toggle_fullscreen" {
+                    let is_fs = window_ipc.fullscreen().is_some();
+                    if is_fs {
+                        window_ipc.set_fullscreen(None);
+                    } else {
+                        window_ipc.set_fullscreen(Some(Fullscreen::Borderless(None)));
+                    }
+                } else if msg == "exit_fullscreen" {
+                    window_ipc.set_fullscreen(None);
+                }
             })
             .build(&*window)
         {
