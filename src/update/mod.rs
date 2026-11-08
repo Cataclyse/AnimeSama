@@ -299,6 +299,13 @@ pub fn download_file(url: &str) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
+fn schedule_delayed_exit() {
+    std::thread::spawn(|| {
+        std::thread::sleep(std::time::Duration::from_millis(600));
+        std::process::exit(0);
+    });
+}
+
 pub fn apply_update() -> Result<UpdateApplyResult, String> {
     let update_info = check_for_updates()?;
     if !update_info.update_available {
@@ -343,15 +350,34 @@ pub fn apply_update() -> Result<UpdateApplyResult, String> {
         let temp_dir = std::env::temp_dir();
         let target = temp_dir.join(&asset_name);
         fs::write(&target, &bytes).map_err(|e| format!("Échec d'écriture du fichier: {}", e))?;
-        let spawned = std::process::Command::new(&target)
-            .args(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"])
-            .spawn();
-        if spawned.is_err() {
-            let _ = opener::open(&target);
+
+        let current_exe_path = std::env::current_exe().unwrap_or_else(|_| target.clone());
+        let setup_path = target.to_string_lossy().to_string();
+        let app_path = current_exe_path.to_string_lossy().to_string();
+
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            const DETACHED_PROCESS: u32 = 0x00000008;
+
+            let cmd_line = format!(
+                "ping 127.0.0.1 -n 2 > NUL & start /wait \"\" \"{}\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART & start \"\" \"{}\"",
+                setup_path, app_path
+            );
+
+            std::process::Command::new("cmd")
+                .args(["/C", &cmd_line])
+                .creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS)
+                .spawn()
+                .ok();
         }
+
+        schedule_delayed_exit();
+
         return Ok(UpdateApplyResult {
             success: true,
-            message: format!("Installateur {} exécuté silencieusement.", asset_name),
+            message: format!("Installateur {} exécuté silencieusement. Redémarrage...", asset_name),
             needs_restart: true,
             downloaded_file: Some(target.to_string_lossy().to_string()),
         });
@@ -392,9 +418,32 @@ pub fn apply_update() -> Result<UpdateApplyResult, String> {
             let _ = fs::rename(&old_exe, &current_exe);
             return Err(format!("Échec du remplacement de l'exécutable: {}", e));
         }
+
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            const DETACHED_PROCESS: u32 = 0x00000008;
+
+            let app_path = current_exe.to_string_lossy().to_string();
+            let old_path = old_exe.to_string_lossy().to_string();
+            let cmd_line = format!(
+                "ping 127.0.0.1 -n 2 > NUL & del /f /q \"{}\" > NUL 2>&1 & start \"\" \"{}\"",
+                old_path, app_path
+            );
+
+            std::process::Command::new("cmd")
+                .args(["/C", &cmd_line])
+                .creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS)
+                .spawn()
+                .ok();
+        }
+
+        schedule_delayed_exit();
+
         Ok(UpdateApplyResult {
             success: true,
-            message: format!("Mise à jour vers {} réussie ! Veuillez redémarrer l'application.", update_info.latest_version),
+            message: format!("Mise à jour vers {} réussie ! Redémarrage de l'application...", update_info.latest_version),
             needs_restart: true,
             downloaded_file: Some(current_exe.to_string_lossy().to_string()),
         })
@@ -410,9 +459,19 @@ pub fn apply_update() -> Result<UpdateApplyResult, String> {
 
         fs::rename(&temp_exe, &current_exe).map_err(|e| format!("Échec du remplacement: {}", e))?;
 
+        #[cfg(target_os = "linux")]
+        {
+            let exe_clone = current_exe.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(600));
+                std::process::Command::new(&exe_clone).spawn().ok();
+                std::process::exit(0);
+            });
+        }
+
         Ok(UpdateApplyResult {
             success: true,
-            message: format!("Mise à jour vers {} appliquée avec succès ! Veuillez redémarrer.", update_info.latest_version),
+            message: format!("Mise à jour vers {} appliquée avec succès ! Redémarrage...", update_info.latest_version),
             needs_restart: true,
             downloaded_file: Some(current_exe.to_string_lossy().to_string()),
         })

@@ -314,7 +314,7 @@ async function applyUpdateDirect() {
     const applyBtn = document.getElementById('applyUpdateBtn');
     if (applyBtn) {
         applyBtn.disabled = true;
-        applyBtn.textContent = t('settings.updating', 'Téléchargement en cours...');
+        applyBtn.textContent = t('settings.updating', 'Mise à jour en cours...');
     }
 
     try {
@@ -322,15 +322,17 @@ async function applyUpdateDirect() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Erreur lors de la mise à jour');
 
-        showToast(data.message || t('settings.update_success', 'Mise à jour réussie !'));
+        showToast(data.message || t('settings.update_success', 'Mise à jour réussie ! Redémarrage...'));
         const desc = document.getElementById('updateStatusDesc');
         if (desc) {
             desc.textContent = data.message;
             desc.style.color = '#46d369';
         }
+        if (data.latest_version) {
+            updateCurrentVersionDisplay(data.latest_version);
+        }
     } catch (e) {
         showToast(t('settings.update_error', 'Erreur de mise à jour') + ' : ' + e.message);
-    } finally {
         if (applyBtn) {
             applyBtn.disabled = false;
             applyBtn.textContent = t('settings.install_update', 'Mettre à jour');
