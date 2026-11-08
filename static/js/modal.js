@@ -410,6 +410,7 @@ async function loadSeasonEpisodes(slug, seasonPath) {
             enrichAnimeMetadata(State.currentAnime.title, State.currentAnime.slug, currentSeasonBase);
         }
     } catch (e) {
+        console.error('Erreur chargement episodes:', e);
         DOM.modalEpisodesGrid.innerHTML = `<div class="episodes-loading">${t('modal.episodes_unavailable', 'Épisodes non disponibles pour cette langue/saison.')}</div>`;
     }
 }
@@ -476,7 +477,7 @@ function renderEpisodesGrid() {
                 } else {
                     progressPercent = Math.min(100, Math.round((epProg.currentTime / (epProg.duration || 1440)) * 100));
                 }
-            } else if (isWatched && epNum < lastWatchedEp) {
+            } else if (lastWatchedEp > 0 && epNum < lastWatchedEp) {
                 progressPercent = 100;
             }
             const isCompleted = progressPercent >= 90;
@@ -517,7 +518,7 @@ function renderEpisodesGrid() {
             } else {
                 progressPercent = Math.min(100, Math.round((epProg.currentTime / (epProg.duration || 1440)) * 100));
             }
-        } else if (isWatched && epNum < lastWatchedEp) {
+        } else if (lastWatchedEp > 0 && epNum < lastWatchedEp) {
             progressPercent = 100;
         }
 

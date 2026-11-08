@@ -1018,66 +1018,63 @@ function renderEpisodesGrid() {
     if (view === 'compact') {
         DOM.modalEpisodesGrid.innerHTML = urls.map((url, idx) => {
             const epNum = idx + 1;
-            const isWatched = epNum <= lastWatchedEp;
-            const isCurrent = epNum === lastWatchedEp;
-            const epProg = getEpisodeProgress(slug, epNum);
-            let progressSeconds = 0;
+            const epProg = getEpisodeProgress(slug, epNum, season);
+            let progressPercent = 0;
             if (epProg && epProg.currentTime > 5) {
                 if (epProg.duration && epProg.duration > 60 && epProg.currentTime >= epProg.duration - 20) {
-                    progressSeconds = 0;
+                    progressPercent = 100;
                 } else {
-                    progressSeconds = epProg.currentTime;
+                    progressPercent = Math.min(100, Math.round((epProg.currentTime / (epProg.duration || 1440)) * 100));
                 }
+            } else if (lastWatchedEp > 0 && epNum < lastWatchedEp) {
+                progressPercent = 100;
             }
+            const isCompleted = progressPercent >= 90;
+            const isCurrent = epNum === lastWatchedEp;
             return `
-                <button class="ep-btn ${isWatched ? 'watched' : ''} ${isCurrent ? 'active' : ''}" 
+                <button class="ep-btn ${isCompleted ? 'watched' : ''} ${isCurrent ? 'active' : ''}" 
                         onclick="openEpisodePlayer('${escapeHtml(slug)}', '${escapeHtml(season)}', ${idx})"
                         title="Épisode ${epNum}">
-                    Ep ${epNum}
+                    <span>Ep ${epNum}</span>
+                    ${progressPercent > 0 ? `<span class="ep-btn-progress"><span class="ep-btn-progress-fill" style="width: ${progressPercent}%;"></span></span>` : ''}
                 </button>
             `;
         }).join('');
         return;
     }
 
-    
     DOM.modalEpisodesGrid.innerHTML = urls.map((url, idx) => {
         const epNum = idx + 1;
-        const isWatched = epNum <= lastWatchedEp;
-        const isCurrent = epNum === lastWatchedEp;
         const isScan = season.toLowerCase().startsWith('scan');
 
-        
         const epMeta = (State.episodesMetadata && State.episodesMetadata[epNum]) ? State.episodesMetadata[epNum] : null;
 
         const epThumb = (epMeta && epMeta.thumbnail) ? epMeta.thumbnail : bannerUrl;
         const epTitle = (epMeta && epMeta.title) ? epMeta.title : `Épisode ${epNum}`;
         const epDuration = isScan ? 'Scan' : ((epMeta && epMeta.length) ? `${epMeta.length} min` : '24 min');
 
-        
         const seasonNum = (season.split('/')[0] || 'saison1').replace(/[^0-9]/g, '') || '1';
         const epDesc = (epMeta && epMeta.synopsis && epMeta.synopsis.trim().length > 0)
             ? epMeta.synopsis
             : `Épisode ${epNum} • Saison ${seasonNum}.`;
 
-        
-        const epProg = getEpisodeProgress(slug, epNum);
+        const epProg = getEpisodeProgress(slug, epNum, season);
         let progressPercent = 0;
-        let progressSeconds = 0;
         if (epProg && epProg.currentTime > 5) {
             if (epProg.duration && epProg.duration > 60 && epProg.currentTime >= epProg.duration - 20) {
-                progressSeconds = 0;
                 progressPercent = 100;
             } else {
-                progressSeconds = epProg.currentTime;
                 progressPercent = Math.min(100, Math.round((epProg.currentTime / (epProg.duration || 1440)) * 100));
             }
-        } else if (isWatched) {
+        } else if (lastWatchedEp > 0 && epNum < lastWatchedEp) {
             progressPercent = 100;
         }
 
+        const isCurrent = epNum === lastWatchedEp;
+        const isCompleted = progressPercent >= 90;
+
         return `
-            <div class="ep-card ${isCurrent ? 'active' : ''} ${isWatched ? 'watched' : ''}" 
+            <div class="ep-card ${isCurrent ? 'active' : ''} ${isCompleted ? 'watched' : ''}" 
                  onclick="openEpisodePlayer('${escapeHtml(slug)}', '${escapeHtml(season)}', ${idx})">
                 <div class="ep-card-num">${epNum}</div>
                 <div class="ep-card-thumb-wrap">
