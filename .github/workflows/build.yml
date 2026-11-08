@@ -37,7 +37,7 @@ jobs:
 
       - name: Package Debian Package
         run: |
-          mkdir -p deb/DEBIAN deb/usr/bin deb/usr/share/applications deb/usr/share/icons/hicolor/256x256/apps
+          mkdir -p deb/DEBIAN deb/usr/bin deb/usr/share/applications deb/usr/share/metainfo deb/usr/share/icons/hicolor/256x256/apps
           cp animesama-linux-gui deb/usr/bin/animesama
           chmod 755 deb/usr/bin/animesama
           cp assets/icon.png deb/usr/share/icons/hicolor/256x256/apps/animesama.png
@@ -45,15 +45,63 @@ jobs:
           cat << 'EOF' > deb/usr/share/applications/animesama.desktop
           [Desktop Entry]
           Name=Anime-Sama
-          Comment=Anime-Sama Desktop - Netflix Edition
+          GenericName=Streaming Anime
+          Comment=Streaming anime haute performance avec interface Netflix
           Exec=/usr/bin/animesama
           Icon=animesama
           Terminal=false
           Type=Application
-          Categories=AudioVideo;Video;Player;
+          Categories=AudioVideo;Video;Player;Network;
+          Keywords=anime;streaming;manga;netflix;animesama;
           StartupWMClass=animesama
           EOF
           chmod 644 deb/usr/share/applications/animesama.desktop
+
+          cat << 'EOF' > deb/usr/share/metainfo/animesama.metainfo.xml
+          <?xml version="1.0" encoding="UTF-8"?>
+          <component type="desktop-application">
+            <id>animesama.desktop</id>
+            <metadata_license>CC0-1.0</metadata_license>
+            <project_license>MIT</project_license>
+            <name>Anime-Sama</name>
+            <summary>Streaming anime avec interface cinématique inspirée de Netflix</summary>
+            <description>
+              <p>
+                Anime-Sama Desktop est une application native ultra-rapide écrite en Rust offrant une expérience cinématographique moderne inspirée de Netflix pour explorer, planifier et regarder l'intégralité du catalogue Anime-Sama sans publicités invasives.
+              </p>
+              <p>Fonctionnalités principales :</p>
+              <ul>
+                <li>Hero Billboard dynamique avec séries en vedette et lecture de trailers au survol</li>
+                <li>Rails de catégories horizontaux avec navigation fluide (Tendances, Derniers ajouts, Classiques)</li>
+                <li>Lecteur cinéma intégré avec gestion des saisons, langues et épisodes</li>
+                <li>Ad Shield intégré bloquant activement les redirections et publicités indésirables</li>
+                <li>Système multilingue complet en 10 langues avec support des fichiers personnalisés</li>
+                <li>Sauvegarde locale sécurisée respectant les standards XDG</li>
+              </ul>
+            </description>
+            <launchable type="desktop-id">animesama.desktop</launchable>
+            <screenshots>
+              <screenshot type="default">
+                <caption>Interface d'accueil Netflix avec Hero Billboard et rails</caption>
+                <image>https://raw.githubusercontent.com/Cataclyse/AnimeSama/main/assets/preview.jpg</image>
+              </screenshot>
+              <screenshot>
+                <caption>Fiche détaillée avec sélection des saisons et épisodes</caption>
+                <image>https://raw.githubusercontent.com/Cataclyse/AnimeSama/main/assets/preview_modal.jpg</image>
+              </screenshot>
+            </screenshots>
+            <url type="homepage">https://github.com/Cataclyse/AnimeSama</url>
+            <url type="bugtracker">https://github.com/Cataclyse/AnimeSama/issues</url>
+            <developer_name>Cataclyse</developer_name>
+            <categories>
+              <category>AudioVideo</category>
+              <category>Video</category>
+              <category>Player</category>
+            </categories>
+            <content_rating type="oars-1.1"/>
+          </component>
+          EOF
+          chmod 644 deb/usr/share/metainfo/animesama.metainfo.xml
 
           cat << 'EOF' > deb/DEBIAN/control
           Package: animesama
@@ -61,10 +109,22 @@ jobs:
           Section: video
           Priority: optional
           Architecture: amd64
-          Maintainer: Cataclyse
+          Maintainer: Cataclyse <contact@anime-sama.to>
+          Homepage: https://github.com/Cataclyse/AnimeSama
           Depends: libwebkit2gtk-4.1-0, libgtk-3-0
-          Description: Anime-Sama Desktop - Netflix Edition
-           Application desktop moderne en Rust offrant une interface Netflix pour Anime-Sama.
+          Description: Application desktop Anime-Sama avec interface Netflix
+           Anime-Sama Desktop est une application native ultra-rapide écrite en Rust
+           offrant une interface immersive inspirée de Netflix pour explorer, planifier
+           et regarder l'intégralité du catalogue Anime-Sama sans publicités invasives.
+           .
+           Fonctionnalités :
+            * Catalogue complet en temps réel issu d'Anime-Sama
+            * Hero Billboard immersif avec bandes-annonces lues au survol
+            * Rails horizontaux Netflix (Tendances, Derniers ajouts, Classiques)
+            * Lecteur cinéma sans publicité avec choix des résolutions et lecteurs
+            * Ad Shield intégré filtrant les redirections et publicités intrusives
+            * 10 langues intégrées avec support des fichiers personnalisés (.lang)
+            * Faible consommation de mémoire vive (< 40 Mo de RAM)
           EOF
           chmod 644 deb/DEBIAN/control
 
