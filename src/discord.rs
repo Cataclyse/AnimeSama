@@ -37,6 +37,7 @@ pub fn init_discord_rpc() {
         let mut client: Option<DiscordIpcClient> = None;
         let mut last_connect_attempt = Instant::now() - Duration::from_secs(60);
         let mut cached_start_ts: Option<u64> = None;
+        let mut home_start_ts: Option<u64> = None;
 
         while let Ok(cmd) = rx.recv() {
             match cmd {
@@ -93,6 +94,7 @@ pub fn init_discord_rpc() {
                         act = act.assets(assets);
 
                         if payload.status == "playing" {
+                            home_start_ts = None;
                             if let (Some(dur), Some(cur)) = (payload.duration, payload.current_time) {
                                 if dur > cur {
                                     let now_secs = std::time::SystemTime::now()
@@ -100,12 +102,6 @@ pub fn init_discord_rpc() {
                                         .unwrap_or_default()
                                         .as_secs();
                                     let computed_start = now_secs.saturating_sub(cur);
-
-                                    // Ne recalcule le timestamp de depart que si l'ecart avec
-                                    // celui deja envoye est significatif (seek, reprise apres
-                                    // pause...). Sinon on garde le meme timestamp pour laisser
-                                    // Discord faire defiler l'elapsed tout seul, sans le
-                                    // throttle qu'introduirait un SET_ACTIVITY trop frequent.
                                     let start_ts = match cached_start_ts {
                                         Some(prev)
                                             if (prev as i64 - computed_start as i64).abs() < 5 =>
@@ -115,21 +111,31 @@ pub fn init_discord_rpc() {
                                         _ => computed_start,
                                     };
                                     cached_start_ts = Some(start_ts);
-                                    let end_ts = start_ts + dur;
-
-                                    // Avec ActivityType::Watching + start ET end, Discord
-                                    // affiche une vraie barre de progression media (comme
-                                    // Spotify) qui defile en continu, au lieu d'un simple
-                                    // compteur elapsed.
                                     act = act.timestamps(
-                                        activity::Timestamps::new()
-                                            .start(start_ts as i64)
-                                            .end(end_ts as i64),
+                                        activity::Timestamps::new().start(start_ts as i64),
                                     );
                                 }
                             }
                         } else {
                             cached_start_ts = None;
+                            if payload.status == "idle" || payload.title == "Page d'accueil" {
+                                let now_secs = std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_secs();
+                                let start_ts = match home_start_ts {
+                                    Some(prev) => prev,
+                                    None => {
+                                        home_start_ts = Some(now_secs);
+                                        now_secs
+                                    }
+                                };
+                                act = act.timestamps(
+                                    activity::Timestamps::new().start(start_ts as i64),
+                                );
+                            } else {
+                                home_start_ts = None;
+                            }
                         }
 
                         let btn = activity::Button::new("Regarder sur Anime-Sama", "https://anime-sama.to");
@@ -142,6 +148,8 @@ pub fn init_discord_rpc() {
                     }
                 }
                 RpcCommand::Clear => {
+                    cached_start_ts = None;
+                    home_start_ts = None;
                     if let Some(c) = client.as_mut() {
                         let _ = c.clear_activity();
                     }
