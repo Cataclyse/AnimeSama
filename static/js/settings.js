@@ -343,18 +343,12 @@ async function runAutoUpdateOnLaunch() {
         if (!res.ok || !data.update_available) return;
 
         currentUpdateInfo = data;
-        const kindLabel = data.install_kind === 'windows_installer' ? ' (Installateur)'
-            : data.install_kind === 'windows_standalone' ? ' (Portable)'
-            : data.install_kind === 'linux_deb' ? ' (Paquet .deb)'
-            : data.install_kind === 'linux_gui_standalone' ? ' (Portable Linux)'
-            : '';
-
-        showToast(`${t('settings.update_available', 'Nouvelle version')} ${data.latest_version}${kindLabel} détectée. Installation automatique...`);
-
         const applyRes = await fetch('/api/update/apply', { method: 'POST' });
         const applyData = await applyRes.json();
         if (applyRes.ok && applyData.success) {
-            showToast(applyData.message || t('settings.update_success', 'Mise à jour réussie !'));
+            if (data.latest_version) {
+                updateCurrentVersionDisplay(data.latest_version);
+            }
             const desc = document.getElementById('updateStatusDesc');
             if (desc) {
                 desc.textContent = applyData.message;

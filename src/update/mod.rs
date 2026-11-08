@@ -326,14 +326,32 @@ pub fn apply_update() -> Result<UpdateApplyResult, String> {
     let asset_name = update_info.asset_name.clone().unwrap_or_else(|| "update.bin".to_string());
     let bytes = download_file(download_url)?;
 
-    if asset_name.ends_with(".deb") || (cfg!(target_os = "windows") && asset_name.to_lowercase().contains("setup")) {
+    if asset_name.ends_with(".deb") {
         let temp_dir = std::env::temp_dir();
         let target = temp_dir.join(&asset_name);
         fs::write(&target, &bytes).map_err(|e| format!("Échec d'écriture du fichier: {}", e))?;
         let _ = opener::open(&target);
         return Ok(UpdateApplyResult {
             success: true,
-            message: format!("Fichier {} téléchargé et lancé.", asset_name),
+            message: format!("Paquet {} téléchargé dans {}.", asset_name, target.display()),
+            needs_restart: true,
+            downloaded_file: Some(target.to_string_lossy().to_string()),
+        });
+    }
+
+    if cfg!(target_os = "windows") && asset_name.to_lowercase().contains("setup") {
+        let temp_dir = std::env::temp_dir();
+        let target = temp_dir.join(&asset_name);
+        fs::write(&target, &bytes).map_err(|e| format!("Échec d'écriture du fichier: {}", e))?;
+        let spawned = std::process::Command::new(&target)
+            .args(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"])
+            .spawn();
+        if spawned.is_err() {
+            let _ = opener::open(&target);
+        }
+        return Ok(UpdateApplyResult {
+            success: true,
+            message: format!("Installateur {} exécuté silencieusement.", asset_name),
             needs_restart: true,
             downloaded_file: Some(target.to_string_lossy().to_string()),
         });
