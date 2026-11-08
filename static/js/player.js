@@ -162,6 +162,10 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
             iframe.onload = () => {
                 syncPlayerMediaMetadata();
                 startPlayerPolling();
+                sendFrameMessage({ type: 'AS_PLAY' });
+                setTimeout(() => sendFrameMessage({ type: 'AS_PLAY' }), 300);
+                setTimeout(() => sendFrameMessage({ type: 'AS_PLAY' }), 800);
+                setTimeout(() => sendFrameMessage({ type: 'AS_PLAY' }), 1600);
             };
             iframe.src = proxyUrl;
         }
@@ -351,6 +355,9 @@ function togglePlayPause() {
     } else {
         willPlay = playerState.paused;
     }
+
+    playerState.paused = !willPlay;
+    updatePlayPauseButton(willPlay);
 
     if (willPlay) {
         sendFrameMessage({ type: 'AS_PLAY' });
@@ -980,10 +987,19 @@ function changeEpisode(delta) {
     flushCurrentPlayback();
     clearInterval(playerState.nextCountdownTimer);
     const newIdx = State.currentEpIndex + delta;
-    if (State.currentEpisodes && State.selectedPlayer) {
-        const urls = State.currentEpisodes.players[State.selectedPlayer] || [];
+    if (State.currentEpisodes) {
+        const players = Object.keys(State.currentEpisodes.players || {});
+        const p = State.selectedPlayer || players[0];
+        const urls = (State.currentEpisodes.players && p) ? (State.currentEpisodes.players[p] || []) : [];
         if (newIdx >= 0 && newIdx < urls.length) {
             openEpisodePlayer(State.currentEpisodes.slug, State.currentEpisodes.season, newIdx, null);
+        } else if (newIdx >= urls.length && delta > 0 && State.currentAnime && State.currentAnime.seasons) {
+            const currentSeasonBase = (State.currentEpisodes.season || '').split('/')[0];
+            const seasonIdx = State.currentAnime.seasons.findIndex(s => s.path.split('/')[0] === currentSeasonBase);
+            if (seasonIdx !== -1 && seasonIdx + 1 < State.currentAnime.seasons.length) {
+                const nextSeasonPath = getSeasonPathForLang(State.currentAnime.seasons[seasonIdx + 1].path, State.selectedLanguage);
+                openEpisodePlayer(State.currentEpisodes.slug, nextSeasonPath, 0, null);
+            }
         }
     }
 }

@@ -181,13 +181,43 @@ function updateModalPlayButton(anime) {
     }
 
     if (DOM.modalPlayBtn) {
-        DOM.modalPlayBtn.onclick = () => {
-            const seasonToPlay = (DOM.modalSeasonSelect && DOM.modalSeasonSelect.value)
-                ? getSeasonPathForLang(DOM.modalSeasonSelect.value, State.selectedLanguage)
-                : activeSeason;
-            openEpisodePlayer(anime.slug, seasonToPlay, targetIdx, null);
-        };
+        DOM.modalPlayBtn.onclick = handleModalMainPlay;
     }
+}
+
+function handleModalMainPlay() {
+    if (!State.currentAnime) return;
+    const anime = State.currentAnime;
+
+    let activeSeason = (DOM.modalSeasonSelect && DOM.modalSeasonSelect.value)
+        ? DOM.modalSeasonSelect.value
+        : (State.currentEpisodes ? State.currentEpisodes.season : 'saison1/vostfr');
+    if (!activeSeason || activeSeason.includes('Chargement') || activeSeason.includes('Loading')) {
+        const seasons = anime.seasons || [];
+        activeSeason = (seasons.length > 0 && seasons[0].path) ? seasons[0].path : 'saison1/vostfr';
+    }
+    if (!activeSeason.includes('/')) {
+        activeSeason = getSeasonPathForLang(activeSeason, State.selectedLanguage);
+    }
+    const currentSeasonBase = (activeSeason || 'saison1').split('/')[0];
+    const savedProgress = getPlaybackProgress(anime.slug);
+    const progForThisSeason = (savedProgress && savedProgress.season && savedProgress.season.split('/')[0] === currentSeasonBase)
+        ? savedProgress
+        : null;
+
+    const historyItem = (State.userData.history || []).find(h => h.slug === anime.slug);
+    const historyForThisSeason = (historyItem && historyItem.season && historyItem.season.split('/')[0] === currentSeasonBase)
+        ? historyItem
+        : null;
+
+    let targetEp = progForThisSeason ? progForThisSeason.episode : (historyForThisSeason ? historyForThisSeason.episode : 1);
+    if (!targetEp || targetEp < 1) targetEp = 1;
+    const maxEps = (State.currentEpisodes && State.currentEpisodes.total_episodes > 0) ? State.currentEpisodes.total_episodes : 9999;
+    if (targetEp > maxEps) targetEp = 1;
+    const targetIdx = Math.max(0, targetEp - 1);
+    const resumeSec = (progForThisSeason && progForThisSeason.currentTime > 5) ? progForThisSeason.currentTime : null;
+
+    openEpisodePlayer(anime.slug, activeSeason, targetIdx, resumeSec);
 }
 
 const LANG_DISPLAY_NAMES = {

@@ -82,6 +82,12 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
             v.addEventListener(evt, attemptSeek, {{ passive: true }});
         }});
 
+        ['loadedmetadata', 'canplay', 'loadeddata'].forEach(function(evt) {{
+            v.addEventListener(evt, function() {{
+                triggerHosterPlay();
+            }}, {{ passive: true }});
+        }});
+
         ['play', 'playing'].forEach(function(evt) {{
             v.addEventListener(evt, function() {{
                 try {{ window.parent.postMessage({{ type: 'AS_PLAY_STATE', paused: false }}, '*'); }} catch(e){{}}
@@ -161,7 +167,7 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
         }} catch(e) {{}}
         try {{
             var playBtns = document.querySelectorAll(
-                'button.plyr__control--overlaid, button[data-plyr="play"], button.vjs-big-play-button, button.play-button, button.btn-play, .jw-display-icon-display'
+                'button.plyr__control--overlaid, button[data-plyr="play"], button.vjs-big-play-button, button.play-button, button.btn-play, .jw-display-icon-display, .play_button, #play, .play-wrapper, .play-btn, .vjs-play-control'
             );
             for (var b = 0; b < playBtns.length; b++) {{
                 try {{ playBtns[b].click(); }} catch(err) {{}}
@@ -171,10 +177,32 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
             var v = document.querySelector('video');
             if (v && v.paused) {{
                 var p2 = v.play();
-                if (p2 && typeof p2.catch === 'function') p2.catch(function(){{}});
+                if (p2 && typeof p2.catch === 'function') {{
+                    p2.catch(function() {{
+                        v.muted = true;
+                        var p3 = v.play();
+                        if (p3 && typeof p3.catch === 'function') p3.catch(function(){{}});
+                        setTimeout(function() {{ v.muted = false; }}, 300);
+                    }});
+                }}
             }}
         }} catch(e) {{}}
     }}
+
+    var autoPlayTries = 0;
+    var autoPlayTimer = setInterval(function() {{
+        autoPlayTries++;
+        var v = document.querySelector('video');
+        if (v) {{
+            hookVideo(v);
+            if (!v.paused || autoPlayTries > 30) {{
+                clearInterval(autoPlayTimer);
+                return;
+            }}
+        }}
+        triggerHosterPlay();
+    }}, 200);
+    setTimeout(function() {{ clearInterval(autoPlayTimer); }}, 10000);
 
     function triggerHosterPause() {{
         try {{

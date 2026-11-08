@@ -50,7 +50,13 @@ function renderSlide(index) {
     updateWatchlistButton(DOM.heroListBtn, inList);
 
     
-    DOM.heroPlayBtn.onclick = () => openEpisodePlayer(slide.slug, getSeasonPathForLang('saison1/vostfr', State.selectedLanguage), 0);
+    DOM.heroPlayBtn.onclick = () => {
+        const savedProgress = getPlaybackProgress(slide.slug);
+        const targetSeason = savedProgress && savedProgress.season ? savedProgress.season : getSeasonPathForLang('saison1/vostfr', State.selectedLanguage);
+        const targetIdx = savedProgress && savedProgress.episode ? Math.max(0, savedProgress.episode - 1) : 0;
+        const resumeSec = (savedProgress && savedProgress.currentTime > 5) ? savedProgress.currentTime : null;
+        openEpisodePlayer(slide.slug, targetSeason, targetIdx, resumeSec);
+    };
     DOM.heroInfoBtn.onclick = () => openDetailModal(slide.slug);
     DOM.heroListBtn.onclick = () => toggleWatchlist(slide.slug);
 }
