@@ -25,6 +25,7 @@ async function openAccountModal() {
         .then(d => {
             DOM.autoSyncCheckbox.checked = !!d.auto_sync;
             DOM.adShieldCheckbox.checked = d.ad_shield !== false;
+            if (d.version) updateCurrentVersionDisplay(d.version);
         })
         .catch(() => {});
 
@@ -188,6 +189,14 @@ async function runSync(direction = 'auto') {
 
 let currentUpdateInfo = null;
 
+function updateCurrentVersionDisplay(version) {
+    if (!version) return;
+    const title = document.getElementById('updateStatusTitle');
+    if (title) {
+        title.textContent = `${t('settings.update_status', 'Version actuelle')} : v${version}`;
+    }
+}
+
 async function checkForUpdates(silent = false) {
     const btn = document.getElementById('checkUpdateBtn');
     const title = document.getElementById('updateStatusTitle');
@@ -208,10 +217,8 @@ async function checkForUpdates(silent = false) {
         if (!res.ok) throw new Error(data.error || 'Erreur');
 
         currentUpdateInfo = data;
-        const currentV = data.current_version || '0.1.0';
-
-        if (title) {
-            title.textContent = `${t('settings.version_current', 'Version')} : v${currentV}`;
+        if (data.current_version) {
+            updateCurrentVersionDisplay(data.current_version);
         }
 
         if (data.update_available) {
@@ -281,6 +288,13 @@ async function applyUpdateDirect() {
         }
     }
 }
+
+fetch('/api/settings')
+    .then(r => r.json())
+    .then(d => {
+        if (d.version) updateCurrentVersionDisplay(d.version);
+    })
+    .catch(() => {});
 
 setTimeout(() => {
     checkForUpdates(true);

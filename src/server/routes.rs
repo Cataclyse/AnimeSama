@@ -327,7 +327,11 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
 
         ("GET", "/api/settings") => {
             let data = state.user_mgr.get_data();
-            respond_json(req, &json!({ "auto_sync": data.auto_sync, "ad_shield": data.ad_shield }).to_string());
+            respond_json(req, &json!({
+                "auto_sync": data.auto_sync,
+                "ad_shield": data.ad_shield,
+                "version": crate::update::CURRENT_VERSION
+            }).to_string());
         }
 
         ("POST", "/api/settings/auto-sync") => {
@@ -387,6 +391,12 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
                 "app_data": app_data.to_string_lossy(),
                 "lang_dir": lang.to_string_lossy(),
                 "userdata_file": userdata.to_string_lossy()
+            }).to_string());
+        }
+
+        ("GET", "/api/version") => {
+            respond_json(req, &json!({
+                "version": crate::update::CURRENT_VERSION
             }).to_string());
         }
 
