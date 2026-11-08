@@ -215,3 +215,10 @@ update.ready=アップデートの準備が完了しました！
 update.enter_app=Anime-Samaに入る
 update.restarting=まもなく再起動します...
 update.error=アップデート中にエラーが発生しました
+
+player.filter_normal=標準
+player.filter_hdr=HDR強化
+player.filter_vivid=鮮やか / アニメ
+player.filter_cinema=シネマ
+player.filter_night=ナイトモード
+player.filters=視覚フィルター

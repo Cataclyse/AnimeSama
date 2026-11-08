@@ -485,6 +485,28 @@
                                 <button class="netflix-speed-opt" onclick="setSpeed(2)">2x</button>
                             </div>
                         </div>
+                        <div class="netflix-filter-wrap">
+                            <button class="netflix-ctrl-btn" id="netflixFilterBtn" onclick="toggleFilterMenu()" title="Filtres visuels">
+                                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"></path></svg>
+                            </button>
+                            <div class="netflix-filter-menu" id="netflixFilterMenu" style="display: none;">
+                                <button class="netflix-filter-opt active" data-filter="normal" onclick="setVideoFilter('normal')">
+                                    <span data-i18n="player.filter_normal">Normal</span>
+                                </button>
+                                <button class="netflix-filter-opt" data-filter="hdr" onclick="setVideoFilter('hdr')">
+                                    <span data-i18n="player.filter_hdr">HDR Boost</span>
+                                </button>
+                                <button class="netflix-filter-opt" data-filter="vivid" onclick="setVideoFilter('vivid')">
+                                    <span data-i18n="player.filter_vivid">Vif / Anime</span>
+                                </button>
+                                <button class="netflix-filter-opt" data-filter="cinema" onclick="setVideoFilter('cinema')">
+                                    <span data-i18n="player.filter_cinema">Cinéma</span>
+                                </button>
+                                <button class="netflix-filter-opt" data-filter="night" onclick="setVideoFilter('night')">
+                                    <span data-i18n="player.filter_night">Mode Nuit</span>
+                                </button>
+                            </div>
+                        </div>
                         <button class="netflix-ctrl-btn" id="netflixPipBtn" onclick="togglePictureInPicture()" title="Picture-in-Picture (P)">
                             <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><rect x="12" y="9" width="8" height="6" rx="1" ry="1" fill="currentColor"></rect></svg>
                         </button>

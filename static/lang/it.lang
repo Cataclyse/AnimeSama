@@ -215,3 +215,10 @@ update.ready=Aggiornamento pronto!
 update.enter_app=Accedi ad Anime-Sama
 update.restarting=Riavvio imminente...
 update.error=Errore durante l'aggiornamento
+
+player.filter_normal=Normale
+player.filter_hdr=HDR Boost
+player.filter_vivid=Vivido / Anime
+player.filter_cinema=Cinema
+player.filter_night=Modalità Notte
+player.filters=Filtri visivi

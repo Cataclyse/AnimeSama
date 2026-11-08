@@ -476,6 +476,56 @@
     font-weight: 700;
 }
 
+.netflix-filter-wrap {
+    position: relative;
+}
+
+.netflix-filter-menu {
+    position: absolute;
+    bottom: 46px;
+    right: 0;
+    background: rgba(20, 20, 20, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(10px);
+    z-index: 25;
+    min-width: 140px;
+}
+
+.netflix-filter-opt {
+    background: transparent;
+    border: none;
+    color: #bbb;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.netflix-filter-opt:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.netflix-filter-opt.active {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 700;
+}
+
+#netflixFilterBtn.active-filter {
+    color: var(--accent);
+}
+
 .netflix-center-pulse {
     position: absolute;
     top: 50%;

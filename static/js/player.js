@@ -6,6 +6,7 @@ let playerState = {
     volume: 1,
     muted: false,
     playbackRate: 1,
+    filter: 'normal',
     timeDisplayMode: 'elapsed',
     idleTimer: null,
     isDraggingScrubber: false,
@@ -13,6 +14,14 @@ let playerState = {
     nextCountdownTimer: null,
     pollInterval: null,
     clickTimeout: null
+};
+
+const VIDEO_FILTERS = {
+    normal: 'none',
+    hdr: 'contrast(1.18) saturate(1.45) brightness(1.06)',
+    vivid: 'saturate(1.75) contrast(1.12) brightness(1.04)',
+    cinema: 'contrast(1.15) brightness(0.96) saturate(1.1) sepia(0.08)',
+    night: 'brightness(0.82) contrast(1.05) saturate(0.9)'
 };
 
 function formatPlayerTime(seconds) {
@@ -218,6 +227,12 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
         const modal = document.getElementById('playerModal');
         if (modal) modal.classList.add('open');
         document.body.style.overflow = 'hidden';
+
+        let savedFilter = 'normal';
+        try {
+            savedFilter = localStorage.getItem('as_video_filter') || 'normal';
+        } catch (e) {}
+        applyVideoFilter(savedFilter);
 
         const prevBtn = document.getElementById('playerPrevBtn');
         const nextBtn = document.getElementById('playerNextBtn');
@@ -554,7 +569,51 @@ function setSpeed(rate) {
 }
 
 function toggleSpeedMenu() {
+    const filterMenu = document.getElementById('netflixFilterMenu');
+    if (filterMenu) filterMenu.style.display = 'none';
     const menu = document.getElementById('netflixSpeedMenu');
+    if (!menu) return;
+    menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
+    resetIdleTimer();
+}
+
+function applyVideoFilter(filterKey) {
+    const key = VIDEO_FILTERS[filterKey] ? filterKey : 'normal';
+    playerState.filter = key;
+    try {
+        localStorage.setItem('as_video_filter', key);
+    } catch (e) {}
+
+    const iframe = document.getElementById('videoIframe');
+    if (iframe) {
+        iframe.style.filter = VIDEO_FILTERS[key];
+    }
+
+    const filterBtn = document.getElementById('netflixFilterBtn');
+    if (filterBtn) {
+        filterBtn.classList.toggle('active-filter', key !== 'normal');
+    }
+
+    const menu = document.getElementById('netflixFilterMenu');
+    if (menu) {
+        const opts = menu.querySelectorAll('.netflix-filter-opt');
+        opts.forEach(o => {
+            o.classList.toggle('active', o.getAttribute('data-filter') === key);
+        });
+    }
+}
+
+function setVideoFilter(filterKey) {
+    applyVideoFilter(filterKey);
+    const menu = document.getElementById('netflixFilterMenu');
+    if (menu) menu.style.display = 'none';
+    resetIdleTimer();
+}
+
+function toggleFilterMenu() {
+    const speedMenu = document.getElementById('netflixSpeedMenu');
+    if (speedMenu) speedMenu.style.display = 'none';
+    const menu = document.getElementById('netflixFilterMenu');
     if (!menu) return;
     menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
     resetIdleTimer();
@@ -1296,9 +1355,15 @@ function initNetflixPlayerEvents() {
             e.preventDefault();
             changeEpisode(1);
         } else if (e.key === 'Escape') {
+            const filterMenu = document.getElementById('netflixFilterMenu');
+            const speedMenu = document.getElementById('netflixSpeedMenu');
             const audioModal = document.getElementById('netflixAudioSubModal');
             const drawer = document.getElementById('netflixEpisodesDrawer');
-            if (audioModal && audioModal.style.display !== 'none') {
+            if (filterMenu && filterMenu.style.display !== 'none') {
+                filterMenu.style.display = 'none';
+            } else if (speedMenu && speedMenu.style.display !== 'none') {
+                speedMenu.style.display = 'none';
+            } else if (audioModal && audioModal.style.display !== 'none') {
                 audioModal.style.display = 'none';
             } else if (drawer && drawer.style.display !== 'none') {
                 drawer.style.display = 'none';

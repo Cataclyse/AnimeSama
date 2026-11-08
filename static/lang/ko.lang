@@ -215,3 +215,10 @@ update.ready=업데이트 준비 완료!
 update.enter_app=Anime-Sama 시작하기
 update.restarting=곧 다시 시작됩니다...
 update.error=업데이트 중 오류 발생
+
+player.filter_normal=보통
+player.filter_hdr=HDR 강화
+player.filter_vivid=선명함 / 애니
+player.filter_cinema=영화관
+player.filter_night=야간 모드
+player.filters=시각 필터

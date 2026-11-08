@@ -215,3 +215,10 @@ update.ready=Обновление готово!
 update.enter_app=Войти в Anime-Sama
 update.restarting=Перезапуск...
 update.error=Ошибка при обновлении
+
+player.filter_normal=Обычный
+player.filter_hdr=HDR Усиление
+player.filter_vivid=Яркий / Аниме
+player.filter_cinema=Кино
+player.filter_night=Ночной режим
+player.filters=Визуальные фильтры
