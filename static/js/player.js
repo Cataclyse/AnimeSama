@@ -7,6 +7,8 @@ let playerState = {
     muted: false,
     playbackRate: 1,
     filter: 'normal',
+    autoFilterInterval: null,
+    autoFilterLastLum: null,
     timeDisplayMode: 'elapsed',
     idleTimer: null,
     isDraggingScrubber: false,
@@ -18,6 +20,7 @@ let playerState = {
 
 const VIDEO_FILTERS = {
     normal: 'none',
+    auto: 'contrast(1.15) saturate(1.4) brightness(1.04)',
     hdr: 'contrast(1.18) saturate(1.45) brightness(1.06)',
     vivid: 'saturate(1.75) contrast(1.12) brightness(1.04)',
     cinema: 'contrast(1.15) brightness(0.96) saturate(1.1) sepia(0.08)',
@@ -577,6 +580,75 @@ function toggleSpeedMenu() {
     resetIdleTimer();
 }
 
+function startDynamicFilter() {
+    stopDynamicFilter();
+    let sampleCanvas = null;
+    let sampleCtx = null;
+
+    playerState.autoFilterInterval = setInterval(() => {
+        if (playerState.filter !== 'auto' || playerState.paused) return;
+        const v = getIframeVideo();
+        const iframe = document.getElementById('videoIframe');
+        if (!iframe) return;
+
+        if (v && v.readyState >= 2 && v.videoWidth > 0 && v.videoHeight > 0) {
+            try {
+                if (!sampleCanvas) {
+                    sampleCanvas = document.createElement('canvas');
+                    sampleCanvas.width = 16;
+                    sampleCanvas.height = 9;
+                    sampleCtx = sampleCanvas.getContext('2d', { willReadFrequently: true });
+                }
+                sampleCtx.drawImage(v, 0, 0, 16, 9);
+                const frameData = sampleCtx.getImageData(0, 0, 16, 9).data;
+                let totalLum = 0;
+                const pixelCount = 16 * 9;
+                for (let i = 0; i < frameData.length; i += 4) {
+                    totalLum += (frameData[i] * 0.299 + frameData[i + 1] * 0.587 + frameData[i + 2] * 0.114);
+                }
+                const avgLum = totalLum / pixelCount;
+                const prev = playerState.autoFilterLastLum !== null ? playerState.autoFilterLastLum : avgLum;
+                const smoothedLum = prev * 0.65 + avgLum * 0.35;
+                playerState.autoFilterLastLum = smoothedLum;
+
+                let b = 1.05;
+                let c = 1.15;
+                let s = 1.35;
+
+                if (smoothedLum < 60) {
+                    b = 1.14;
+                    c = 1.22;
+                    s = 1.25;
+                } else if (smoothedLum > 170) {
+                    b = 0.96;
+                    c = 1.12;
+                    s = 1.45;
+                } else {
+                    b = 1.06;
+                    c = 1.18;
+                    s = 1.42;
+                }
+                iframe.style.filter = `contrast(${c.toFixed(2)}) saturate(${s.toFixed(2)}) brightness(${b.toFixed(2)})`;
+                return;
+            } catch (err) {}
+        }
+
+        const t = (playerState.currentTime || 0) * 0.2;
+        const b = (1.04 + 0.04 * Math.sin(t)).toFixed(3);
+        const c = (1.16 + 0.03 * Math.cos(t * 0.7)).toFixed(3);
+        const s = (1.42 + 0.05 * Math.sin(t * 0.5)).toFixed(3);
+        iframe.style.filter = `contrast(${c}) saturate(${s}) brightness(${b})`;
+    }, 450);
+}
+
+function stopDynamicFilter() {
+    if (playerState.autoFilterInterval) {
+        clearInterval(playerState.autoFilterInterval);
+        playerState.autoFilterInterval = null;
+    }
+    playerState.autoFilterLastLum = null;
+}
+
 function applyVideoFilter(filterKey) {
     const key = VIDEO_FILTERS[filterKey] ? filterKey : 'normal';
     playerState.filter = key;
@@ -585,8 +657,14 @@ function applyVideoFilter(filterKey) {
     } catch (e) {}
 
     const iframe = document.getElementById('videoIframe');
-    if (iframe) {
-        iframe.style.filter = VIDEO_FILTERS[key];
+
+    if (key === 'auto') {
+        startDynamicFilter();
+    } else {
+        stopDynamicFilter();
+        if (iframe) {
+            iframe.style.filter = VIDEO_FILTERS[key];
+        }
     }
 
     const filterBtn = document.getElementById('netflixFilterBtn');
@@ -1121,6 +1199,7 @@ function changeEpisode(delta) {
 }
 
 function closePlayerModal() {
+    stopDynamicFilter();
     flushCurrentPlayback();
     stopPlayerPolling();
     clearInterval(playerState.nextCountdownTimer);

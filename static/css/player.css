@@ -526,6 +526,10 @@
     color: var(--accent);
 }
 
+#videoIframe {
+    transition: filter 0.35s ease;
+}
+
 .netflix-center-pulse {
     position: absolute;
     top: 50%;
