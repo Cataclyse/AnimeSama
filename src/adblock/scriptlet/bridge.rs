@@ -4,12 +4,10 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
     var asEpNum = {};
     try {{
         if (!resumeTarget || resumeTarget <= 0) {{
-            var p = new URLSearchParams(window.location.search);
-            resumeTarget = parseFloat(p.get('as_resume') || '0');
+            resumeTarget = parseFloat(new URLSearchParams(window.location.search).get('as_resume') || '0');
         }}
         if (!asEpNum || asEpNum <= 0) {{
-            var p2 = new URLSearchParams(window.location.search);
-            asEpNum = parseInt(p2.get('as_ep') || '0', 10);
+            asEpNum = parseInt(new URLSearchParams(window.location.search).get('as_ep') || '0', 10);
         }}
     }} catch(e) {{}}
 
@@ -35,16 +33,12 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
     function report(v, force) {{
         if (!v || isNaN(v.currentTime)) return;
         var now = Date.now();
-        if (resumeTarget > 2 && !v._asSeekCompleted && v.currentTime < resumeTarget - 2) {{
-            return;
-        }}
+        if (resumeTarget > 2 && !v._asSeekCompleted && v.currentTime < resumeTarget - 2) return;
         if (!force && now - lastReported < 250) return;
         lastReported = now;
         var bEnd = 0;
         try {{
-            if (v.buffered && v.buffered.length > 0) {{
-                bEnd = v.buffered.end(v.buffered.length - 1);
-            }}
+            if (v.buffered && v.buffered.length > 0) bEnd = v.buffered.end(v.buffered.length - 1);
         }} catch(e) {{}}
         try {{
             window.parent.postMessage({{
@@ -61,6 +55,70 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
         }} catch(e) {{}}
     }}
 
+    function notify(type, extra) {{
+        try {{
+            var msg = Object.assign({{ type: type }}, extra || {{}});
+            window.parent.postMessage(msg, '*');
+        }} catch(e) {{}}
+    }}
+
+    function withHoster(fn) {{
+        try {{
+            if (typeof window.jwplayer === 'function') {{
+                var j = window.jwplayer();
+                if (j) fn(j, 'jw');
+            }}
+        }} catch(e) {{}}
+        try {{
+            if (window.player) fn(window.player, 'player');
+        }} catch(e) {{}}
+    }}
+
+    function triggerHosterPlay() {{
+        withHoster(function(p) {{
+            if (typeof p.play === 'function') {{
+                var res = p.play();
+                if (res && typeof res.catch === 'function') res.catch(function() {{}});
+            }}
+        }});
+        try {{
+            var btns = document.querySelectorAll('button.plyr__control--overlaid, button[data-plyr="play"], button.vjs-big-play-button, button.play-button, button.btn-play, .jw-display-icon-display, .play_button, #play, .play-wrapper, .play-btn, .vjs-play-control');
+            for (var b = 0; b < btns.length; b++) {{
+                try {{ btns[b].click(); }} catch(e) {{}}
+            }}
+        }} catch(e) {{}}
+        try {{
+            var v = document.querySelector('video');
+            if (v && v.paused) {{
+                var p = v.play();
+                if (p && typeof p.catch === 'function') {{
+                    p.catch(function() {{
+                        v.muted = true;
+                        var p2 = v.play();
+                        if (p2 && typeof p2.catch === 'function') p2.catch(function() {{}});
+                        setTimeout(function() {{ v.muted = false; }}, 300);
+                    }});
+                }}
+            }}
+        }} catch(e) {{}}
+    }}
+
+    function triggerHosterPause() {{
+        try {{
+            var v = document.querySelector('video');
+            if (v && !v.paused) v.pause();
+        }} catch(e) {{}}
+        withHoster(function(p) {{
+            if (typeof p.pause === 'function') p.pause();
+        }});
+    }}
+
+    function togglePlay() {{
+        var v = document.querySelector('video');
+        if (v && !v.paused) triggerHosterPause();
+        else triggerHosterPlay();
+    }}
+
     function hookVideo(v) {{
         if (v._asHooked) return;
         v._asHooked = true;
@@ -71,9 +129,7 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
             try {{
                 if (v.readyState >= 1 || (v.duration && v.duration > 2) || v.currentTime > 0) {{
                     v.currentTime = resumeTarget;
-                    if (Math.abs(v.currentTime - resumeTarget) < 3) {{
-                        v._asSeekCompleted = true;
-                    }}
+                    if (Math.abs(v.currentTime - resumeTarget) < 3) v._asSeekCompleted = true;
                 }}
             }} catch(e) {{}}
         }}
@@ -81,41 +137,20 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
         ['loadedmetadata', 'loadeddata', 'canplay', 'canplaythrough', 'play', 'playing'].forEach(function(evt) {{
             v.addEventListener(evt, attemptSeek, {{ passive: true }});
         }});
-
         ['loadedmetadata', 'canplay', 'loadeddata'].forEach(function(evt) {{
-            v.addEventListener(evt, function() {{
-                triggerHosterPlay();
-            }}, {{ passive: true }});
+            v.addEventListener(evt, triggerHosterPlay, {{ passive: true }});
         }});
 
-        ['play', 'playing'].forEach(function(evt) {{
-            v.addEventListener(evt, function() {{
-                try {{ window.parent.postMessage({{ type: 'AS_PLAY_STATE', paused: false }}, '*'); }} catch(e){{}}
-            }}, {{ passive: true }});
-        }});
-        ['pause'].forEach(function(evt) {{
-            v.addEventListener(evt, function() {{
-                try {{ window.parent.postMessage({{ type: 'AS_PLAY_STATE', paused: true }}, '*'); }} catch(e){{}}
-            }}, {{ passive: true }});
-        }});
-        ['waiting'].forEach(function(evt) {{
-            v.addEventListener(evt, function() {{
-                try {{ window.parent.postMessage({{ type: 'AS_WAITING', waiting: true }}, '*'); }} catch(e){{}}
-            }}, {{ passive: true }});
-        }});
+        v.addEventListener('play', function() {{ notify('AS_PLAY_STATE', {{ paused: false }}); }}, {{ passive: true }});
+        v.addEventListener('pause', function() {{ notify('AS_PLAY_STATE', {{ paused: true }}); report(v, true); }}, {{ passive: true }});
+        v.addEventListener('waiting', function() {{ notify('AS_WAITING', {{ waiting: true }}); }}, {{ passive: true }});
         ['canplay', 'canplaythrough', 'playing'].forEach(function(evt) {{
-            v.addEventListener(evt, function() {{
-                try {{ window.parent.postMessage({{ type: 'AS_WAITING', waiting: false }}, '*'); }} catch(e){{}}
-            }}, {{ passive: true }});
+            v.addEventListener(evt, function() {{ notify('AS_WAITING', {{ waiting: false }}); }}, {{ passive: true }});
         }});
-        v.addEventListener('ended', function() {{
-            try {{ window.parent.postMessage({{ type: 'AS_ENDED' }}, '*'); }} catch(e){{}}
-        }}, {{ passive: true }});
+        v.addEventListener('ended', function() {{ notify('AS_ENDED'); report(v, true); }}, {{ passive: true }});
 
         v.addEventListener('seeked', function() {{
-            if (resumeTarget > 2 && Math.abs(v.currentTime - resumeTarget) < 4) {{
-                v._asSeekCompleted = true;
-            }}
+            if (resumeTarget > 2 && Math.abs(v.currentTime - resumeTarget) < 4) v._asSeekCompleted = true;
             report(v, true);
         }}, {{ passive: true }});
 
@@ -124,15 +159,11 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
                 if (v.currentTime < resumeTarget - 2) {{
                     try {{ v.currentTime = resumeTarget; }} catch(e) {{}}
                     return;
-                }} else {{
-                    v._asSeekCompleted = true;
                 }}
+                v._asSeekCompleted = true;
             }}
             report(v, false);
         }}, {{ passive: true }});
-
-        v.addEventListener('pause', function() {{ report(v, true); }}, {{ passive: true }});
-        v.addEventListener('ended', function() {{ report(v, true); }}, {{ passive: true }});
 
         window.addEventListener('beforeunload', function() {{ report(v, true); }});
         window.addEventListener('pagehide', function() {{ report(v, true); }});
@@ -141,53 +172,13 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
         }});
     }}
 
-    var videoPollCount = 0;
     var videoPoll = setInterval(function() {{
         var list = document.querySelectorAll('video');
         if (list.length > 0) {{
             for (var i = 0; i < list.length; i++) hookVideo(list[i]);
-            videoPollCount++;
-            if (videoPollCount >= 10) clearInterval(videoPoll);
         }}
     }}, 300);
     setTimeout(function() {{ clearInterval(videoPoll); }}, 15000);
-
-    function triggerHosterPlay() {{
-        try {{
-            if (window.player && typeof window.player.play === 'function') {{
-                var p1 = window.player.play();
-                if (p1 && typeof p1.catch === 'function') p1.catch(function(){{}});
-            }}
-        }} catch(e) {{}}
-        try {{
-            if (window.jwplayer && typeof window.jwplayer === 'function') {{
-                var jwp = window.jwplayer();
-                if (jwp && typeof jwp.play === 'function') jwp.play();
-            }}
-        }} catch(e) {{}}
-        try {{
-            var playBtns = document.querySelectorAll(
-                'button.plyr__control--overlaid, button[data-plyr="play"], button.vjs-big-play-button, button.play-button, button.btn-play, .jw-display-icon-display, .play_button, #play, .play-wrapper, .play-btn, .vjs-play-control'
-            );
-            for (var b = 0; b < playBtns.length; b++) {{
-                try {{ playBtns[b].click(); }} catch(err) {{}}
-            }}
-        }} catch(e) {{}}
-        try {{
-            var v = document.querySelector('video');
-            if (v && v.paused) {{
-                var p2 = v.play();
-                if (p2 && typeof p2.catch === 'function') {{
-                    p2.catch(function() {{
-                        v.muted = true;
-                        var p3 = v.play();
-                        if (p3 && typeof p3.catch === 'function') p3.catch(function(){{}});
-                        setTimeout(function() {{ v.muted = false; }}, 300);
-                    }});
-                }}
-            }}
-        }} catch(e) {{}}
-    }}
 
     var autoPlayTries = 0;
     var autoPlayTimer = setInterval(function() {{
@@ -204,71 +195,31 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
     }}, 200);
     setTimeout(function() {{ clearInterval(autoPlayTimer); }}, 10000);
 
-    function triggerHosterPause() {{
-        try {{
-            var v = document.querySelector('video');
-            if (v && !v.paused) v.pause();
-        }} catch(e) {{}}
-        try {{
-            if (window.player && typeof window.player.pause === 'function') {{
-                window.player.pause();
-            }}
-        }} catch(e) {{}}
-        try {{
-            if (window.jwplayer && typeof window.jwplayer === 'function') {{
-                var jwp = window.jwplayer();
-                if (jwp && typeof jwp.pause === 'function') jwp.pause();
-            }}
-        }} catch(e) {{}}
-    }}
-
-    function togglePlay() {{
-        var v = document.querySelector('video');
-        if (v && !v.paused) {{
-            triggerHosterPause();
-        }} else {{
-            triggerHosterPlay();
-        }}
-    }}
-
     function setupOneClickPlay() {{
         var userStarted = false;
-        function tryStart(e) {{
+        document.addEventListener('click', function(e) {{
             if (userStarted) return;
             var t = e.target;
-            if (t && t.closest && t.closest('.jw-controlbar, .jw-settings-menu, .jw-button-color, button, input')) {{
-                return;
-            }}
-            try {{
-                triggerHosterPlay();
-                userStarted = true;
-            }} catch(err) {{}}
-        }}
-        document.addEventListener('click', tryStart, {{ capture: true }});
+            if (t && t.closest && t.closest('.jw-controlbar, .jw-settings-menu, .jw-button-color, button, input')) return;
+            try {{ triggerHosterPlay(); userStarted = true; }} catch(e) {{}}
+        }}, {{ capture: true }});
         window.addEventListener('playing', function() {{ userStarted = true; }}, true);
     }}
     setupOneClickPlay();
 
     window.addEventListener('keydown', function(e) {{
         var tag = (e.target && e.target.tagName || '').toUpperCase();
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target && e.target.isContentEditable)) {{
-            return;
-        }}
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target && e.target.isContentEditable)) return;
+        var v = document.querySelector('video');
         if (e.code === 'Space' || e.key === ' ' || e.key === 'k' || e.key === 'K') {{
-            e.preventDefault();
-            e.stopPropagation();
-            togglePlay();
-        }} else if (e.code === 'ArrowLeft' || e.key === 'ArrowLeft') {{
-            var v = document.querySelector('video');
-            if (v && !isNaN(v.currentTime)) {{
+            e.preventDefault(); e.stopPropagation(); togglePlay();
+        }} else if (v && !isNaN(v.currentTime)) {{
+            if (e.code === 'ArrowLeft' || e.key === 'ArrowLeft') {{
                 e.preventDefault();
-                try {{ v.currentTime = Math.max(0, v.currentTime - 5); }} catch(err) {{}}
-            }}
-        }} else if (e.code === 'ArrowRight' || e.key === 'ArrowRight') {{
-            var v = document.querySelector('video');
-            if (v && !isNaN(v.currentTime)) {{
+                try {{ v.currentTime = Math.max(0, v.currentTime - 5); }} catch(e) {{}}
+            }} else if (e.code === 'ArrowRight' || e.key === 'ArrowRight') {{
                 e.preventDefault();
-                try {{ v.currentTime = Math.min(v.duration || Infinity, v.currentTime + 5); }} catch(err) {{}}
+                try {{ v.currentTime = Math.min(v.duration || Infinity, v.currentTime + 5); }} catch(e) {{}}
             }}
         }}
     }}, true);
@@ -276,96 +227,61 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
     window.addEventListener('message', function(ev) {{
         if (!ev.data) return;
         var v = document.querySelector('video');
-        if (ev.data.type === 'AS_SEEK_TO') {{
-            var target = parseFloat(ev.data.time);
+        var d = ev.data;
+        if (d.type === 'AS_SEEK_TO') {{
+            var target = parseFloat(d.time);
             if (!isNaN(target)) {{
-                try {{
-                    if (window.jwplayer && typeof window.jwplayer === 'function') {{
-                        var jwp = window.jwplayer();
-                        if (jwp && typeof jwp.seek === 'function') jwp.seek(target);
-                    }}
-                }} catch(e) {{}}
-                try {{
-                    if (window.player && typeof window.player.currentTime !== 'undefined') {{
-                        window.player.currentTime = target;
-                    }}
-                }} catch(e) {{}}
-                if (v) {{
-                    try {{ v.currentTime = target; }} catch(err) {{}}
-                }}
+                withHoster(function(p) {{
+                    if (typeof p.seek === 'function') p.seek(target);
+                    else if (typeof p.currentTime !== 'undefined') p.currentTime = target;
+                }});
+                if (v) try {{ v.currentTime = target; }} catch(e) {{}}
             }}
-        }} else if (ev.data.type === 'AS_TOGGLE_PLAY') {{
+        }} else if (d.type === 'AS_TOGGLE_PLAY') {{
             togglePlay();
-        }} else if (ev.data.type === 'AS_PLAY') {{
+        }} else if (d.type === 'AS_PLAY') {{
             triggerHosterPlay();
-        }} else if (ev.data.type === 'AS_PAUSE') {{
+        }} else if (d.type === 'AS_PAUSE') {{
             triggerHosterPause();
-        }} else if (ev.data.type === 'AS_SEEK_RELATIVE') {{
-            var delta = parseFloat(ev.data.delta) || 0;
+        }} else if (d.type === 'AS_SEEK_RELATIVE') {{
+            var delta = parseFloat(d.delta) || 0;
             if (v && !isNaN(v.currentTime)) {{
                 var newT = Math.max(0, Math.min(v.duration || Infinity, v.currentTime + delta));
-                try {{
-                    if (window.jwplayer && typeof window.jwplayer === 'function') {{
-                        var jwp2 = window.jwplayer();
-                        if (jwp2 && typeof jwp2.seek === 'function') jwp2.seek(newT);
-                    }}
-                }} catch(e) {{}}
-                try {{
-                    if (window.player && typeof window.player.currentTime !== 'undefined') {{
-                        window.player.currentTime = newT;
-                    }}
-                }} catch(e) {{}}
-                try {{ v.currentTime = newT; }} catch(err) {{}}
+                withHoster(function(p) {{
+                    if (typeof p.seek === 'function') p.seek(newT);
+                    else if (typeof p.currentTime !== 'undefined') p.currentTime = newT;
+                }});
+                try {{ v.currentTime = newT; }} catch(e) {{}}
             }}
-        }} else if (ev.data.type === 'AS_SET_VOLUME') {{
-            var vol = parseFloat(ev.data.volume);
+        }} else if (d.type === 'AS_SET_VOLUME') {{
+            var vol = parseFloat(d.volume);
             if (!isNaN(vol)) {{
-                try {{
-                    if (window.jwplayer && typeof window.jwplayer === 'function') {{
-                        var jwpV = window.jwplayer();
-                        if (jwpV && typeof jwpV.setVolume === 'function') jwpV.setVolume(Math.round(vol * 100));
-                    }}
-                }} catch(e) {{}}
-                try {{
-                    if (window.player && typeof window.player.volume !== 'undefined') {{
-                        window.player.volume = vol;
-                    }}
-                }} catch(e) {{}}
-                if (v) {{
-                    try {{ v.volume = Math.max(0, Math.min(1, vol)); }} catch(err) {{}}
-                }}
+                withHoster(function(p) {{
+                    if (typeof p.setVolume === 'function') p.setVolume(Math.round(vol * 100));
+                    else if (typeof p.volume !== 'undefined') p.volume = vol;
+                }});
+                if (v) try {{ v.volume = Math.max(0, Math.min(1, vol)); }} catch(e) {{}}
             }}
-        }} else if (ev.data.type === 'AS_SET_MUTED') {{
-            var isMuted = !!ev.data.muted;
-            try {{
-                if (window.jwplayer && typeof window.jwplayer === 'function') {{
-                    var jwpM = window.jwplayer();
-                    if (jwpM && typeof jwpM.setMute === 'function') jwpM.setMute(isMuted);
-                }}
-            }} catch(e) {{}}
-            try {{
-                if (window.player && typeof window.player.muted !== 'undefined') {{
-                    window.player.muted = isMuted;
-                }}
-            }} catch(e) {{}}
-            if (v) {{
-                try {{ v.muted = isMuted; }} catch(err) {{}}
-            }}
-        }} else if (ev.data.type === 'AS_SET_PLAYBACK_RATE') {{
-            var rate = parseFloat(ev.data.rate);
-            if (v && !isNaN(rate)) {{
-                try {{ v.playbackRate = rate; }} catch(err) {{}}
-            }}
-        }} else if (ev.data.type === 'AS_SET_METADATA') {{
-            applyMediaMetadata(ev.data.epTitle, ev.data.animeTitle, ev.data.poster);
-        }} else if (ev.data.type === 'AS_REQUEST_PIP') {{
+        }} else if (d.type === 'AS_SET_MUTED') {{
+            var isMuted = !!d.muted;
+            withHoster(function(p) {{
+                if (typeof p.setMute === 'function') p.setMute(isMuted);
+                else if (typeof p.muted !== 'undefined') p.muted = isMuted;
+            }});
+            if (v) try {{ v.muted = isMuted; }} catch(e) {{}}
+        }} else if (d.type === 'AS_SET_PLAYBACK_RATE') {{
+            var rate = parseFloat(d.rate);
+            if (v && !isNaN(rate)) try {{ v.playbackRate = rate; }} catch(e) {{}}
+        }} else if (d.type === 'AS_SET_METADATA') {{
+            applyMediaMetadata(d.epTitle, d.animeTitle, d.poster);
+        }} else if (d.type === 'AS_REQUEST_PIP') {{
             if (document.pictureInPictureElement) {{
-                try {{ document.exitPictureInPicture().catch(function(){{}}); }} catch(err) {{}}
+                try {{ document.exitPictureInPicture().catch(function() {{}}); }} catch(e) {{}}
             }} else if (v && v.requestPictureInPicture) {{
                 try {{
-                    applyMediaMetadata(ev.data.epTitle, ev.data.animeTitle, ev.data.poster);
-                    v.requestPictureInPicture().catch(function(){{}});
-                }} catch(err) {{}}
+                    applyMediaMetadata(d.epTitle, d.animeTitle, d.poster);
+                    v.requestPictureInPicture().catch(function() {{}});
+                }} catch(e) {{}}
             }}
         }}
     }});"#,
