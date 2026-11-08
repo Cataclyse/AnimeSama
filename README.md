@@ -1,91 +1,96 @@
-# 🍿 Anime-Sama — Netflix Edition (Rust)
+# Anime-Sama Desktop
 
-Une application desktop moderne et complète écrite en **Rust** offrant une interface inspirée de **Netflix** pour explorer le catalogue, le planning, les épisodes et le streaming directement issus d'Anime-Sama.
+A fast, lightweight native desktop application written in Rust that provides a Netflix-style interface for streaming anime, scans, and webtoons from Anime-Sama.
 
----
+![Anime-Sama Desktop](assets/preview.jpg)
 
-## 🚀 Fonctionnalités
+## Features
 
-- **Interface Netflix Authentique** :
-  - **Hero Billboard** cinématique avec animes en vedette, défilement automatique, synopsis complet, badges et genres.
-  - **Rangées horizontales (Rails Netflix)** avec défilement fluide et flèches de navigation.
-  - **Aperçu vidéo au survol** : bandes-annonces lues au survol prolongé avec bouton de contrôle du son.
-  - **Fiche détaillée modale** avec synopsis, sélection des saisons, sélection des langues (VOSTFR, VF...) et grille d'épisodes avec miniatures.
-  - **Lecteur cinéma intégré** : visionnage direct dans l'application avec contrôles précédent / suivant, choix du lecteur et plein écran.
-- **Système Multilingue & Custom Languages** :
-  - 10 langues officielles intégrées (.lang) : Français, Anglais, Japonais, Espagnol, Allemand, Italien, Portugais, Arabe, Russe et Coréen.
-  - Menu déroulant avec vrais drapeaux SVG vectoriels.
-  - **Support des langues personnalisées** : déposez simplement n'importe quel fichier `.lang` dans `%LOCALAPPDATA%\AnimeSama\lang` pour l'ajouter à l'application.
-- **Ad Shield Intégré** :
-  - Bloqueur de publicités et d'onglets intempestifs sur les lecteurs tiers (VOE, VidMoly, Uqload).
-  - Proxy local filtrant les scripts indésirables et les popups trompeuses.
-- **Données Centralisées dans `%LOCALAPPDATA%\AnimeSama` (Windows) ou `~/.local/share/AnimeSama` (Linux)** :
-  - Vos listes, favoris, historique et sessions sont conservés en lieu sûr dans le dossier utilisateur local (`userdata.json`, `session.json`).
-  - Aucun stockage polluant dans le dossier de travail.
-- **Synchronisation avec votre compte Anime-Sama** :
-  - Connexion optionnelle à votre compte anime-sama.to avec synchronisation automatique ou manuelle de votre progression.
+- **Netflix-Style Interface**: Hero billboard with featured titles, horizontal category rails, smooth navigation, and video trailer previews on hover with volume control.
+- **Embedded Video Player**: Integrated cinema player with episode navigation, season selector, hoster switching, and fullscreen support.
+- **Built-in Ad Shield**: Local reverse proxy blocking intrusive redirects, popups, and tracker scripts from third-party video hosts (VOE, VidMoly, Uqload).
+- **Internationalization (i18n)**: 10 built-in languages (French, English, Japanese, Spanish, German, Italian, Portuguese, Arabic, Russian, Korean) plus custom `.lang` file support.
+- **Isolated Storage**: Watchlist, watch history, and session tokens are stored in the user data directory (`%LOCALAPPDATA%\AnimeSama` on Windows, `~/.local/share/AnimeSama` on Linux) to prevent sensitive data leaks.
+- **Cloud Account Sync**: Optional login to anime-sama.to with bidirectional progress and favorites synchronization.
+- **In-App Auto-Updater**: Automatic background release checks against GitHub Releases with one-click direct update installation.
+- **Minimal Resource Usage**: Self-contained Rust binary consuming under 40 MB of RAM with zero Electron or Node.js runtime overhead.
 
----
+## Installation
 
-## 💻 Démarrage & Exécution
+Precompiled binaries and packages are available on the [Releases](https://github.com/Cataclyse/AnimeSama/releases) page.
 
-### 🐧 Compatibilité Linux
+### Windows
 
-L'application est **100% compatible Linux** (ainsi que Windows et macOS). Sous Linux, le moteur utilise **GTK 3** et **WebKitGTK** pour la fenêtre native.
+Download `animesama.exe` or `animesama-windows-x86_64.zip`, extract if needed, and run the executable.
 
-#### Dépendances système requises (Linux) :
+### Linux (Debian / Ubuntu / Linux Mint)
 
-- **Ubuntu / Debian / Mint** :
-  ```bash
-  sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev build-essential
-  ```
-- **Arch Linux / Manjaro** :
-  ```bash
-  sudo pacman -S webkit2gtk-4.1 gtk3 base-devel
-  ```
-- **Fedora / RHEL** :
-  ```bash
-  sudo dnf install webkit2gtk4.1-devel gtk3-devel
-  ```
+Download the `.deb` package and install it via `apt`:
 
-*Note : si WebKitGTK n'est pas installé ou sur un serveur sans affichage graphique, vous pouvez exécuter `cargo run --release -- --browser` ou `cargo run --release -- --headless`.*
+```bash
+sudo apt install ./animesama_0.1.0_amd64.deb
+```
 
-### 1. Lancement Standard (Fenêtre Native Desktop)
+This installs the binary to `/usr/bin/animesama`, registers system dependencies (`libwebkit2gtk-4.1-0`, `libgtk-3-0`), and adds Anime-Sama to your desktop application menu with its official icon.
+
+### Linux (Portable Standalone)
+
+- **Desktop GUI**: `animesama-linux-gui` (requires `libwebkit2gtk-4.1-0` and `libgtk-3-0`)
+- **Headless / Server**: `animesama-linux-server` (zero C/WebKitGTK dependencies, runs on any Linux distribution and serves the UI over HTTP)
+
+```bash
+chmod +x animesama-linux-gui
+./animesama-linux-gui
+```
+
+## Building from Source
+
+### Prerequisites
+
+- **Rust toolchain** (1.75+): Install via [rustup.rs](https://rustup.rs)
+- **Linux dependencies** (for native GUI build):
+  - Debian / Ubuntu: `sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev build-essential`
+  - Arch Linux: `sudo pacman -S webkit2gtk-4.1 gtk3 base-devel`
+  - Fedora: `sudo dnf install webkit2gtk4.1-devel gtk3-devel`
+
+### Build & Run
+
+Standard desktop window (WebView2 on Windows, WebKitGTK on Linux):
+
 ```bash
 cargo run --release
 ```
-L'application ouvre une fenêtre native (WebView2 sur Windows, WebKitGTK sur Linux avec accélération matérielle et l'icône officielle Anime-Sama).
 
-### 2. Lancement avec Navigateur
-Pour ouvrir l'application dans votre navigateur web par défaut :
+Browser mode (launches the local server and opens your default web browser):
+
 ```bash
 cargo run --release -- --browser
 ```
 
-### 3. Lancement Mode Serveur Seul (Headless)
-Pour lancer le serveur local sans ouvrir de fenêtre :
+Headless server mode (for remote VPS or background service without GUI):
+
 ```bash
 cargo run --release -- --headless
 ```
-Accédez ensuite à l'interface sur [http://127.0.0.1:4567](http://127.0.0.1:4567).
 
----
+To compile without GTK/WebKit dependencies (pure server build for older Linux distros):
 
-## 🛠 Structure du Projet
+```bash
+cargo build --release --no-default-features
+```
 
-- `src/main.rs` : Point d'entrée de l'application, gestion CLI et fenêtre native (`Tao` + `Wry`) avec icône officielle Anime-Sama.
-- `src/adblock/` : Moteur de protection Ad Shield contre les popups et traqueurs.
-- `src/catalogue/` : Extraction du catalogue temps réel et intégration des trailers vidéo.
-- `src/proxy/` : Reverse-proxy local pour contourner les protections iframes et sécuriser les flux de streaming.
-- `src/scraper/` : Scraper temps réel d'Anime-Sama (saisons, langues, lecteurs et épisodes).
-- `src/server/` : Serveur HTTP multi-thread (`tiny_http`), routes API et distribution des ressources.
-- `src/user/` : Gestion du profil, authentification cloud anime-sama.to et gestion des chemins `%LOCALAPPDATA%\AnimeSama`.
-- `static/css/` : Feuilles de styles modulaires (thème sombre Netflix, animations, responsive design).
-- `static/js/` : Moteur frontend modulaire en JavaScript vanilla sans dépendance externe lourde.
-- `static/lang/` : Fichiers de langues `.lang` complets pour l'internationalisation.
+## Project Layout
 
----
+- `src/main.rs`: Entry point, CLI argument parsing, window lifecycle (`Tao` and `Wry`).
+- `src/adblock/`: Ad Shield filtering rules and popup sanitization.
+- `src/catalogue/`: Catalogue scrapers, categories, and trailer resolvers.
+- `src/proxy/`: Local streaming reverse proxy and iframe unblocking.
+- `src/scraper/`: Anime-Sama real-time metadata parser (seasons, episodes, hosts).
+- `src/server/`: Multi-threaded HTTP server (`tiny_http`), REST API endpoints, and embedded static assets.
+- `src/update/`: GitHub Releases auto-update checker and self-installer.
+- `src/user/`: Profile management, Anime-Sama cloud auth, and XDG/AppData paths.
+- `static/`: Frontend interface (Netflix CSS theme, vanilla JavaScript modules, and `.lang` translation files).
 
-## 📄 Licence
+## License
 
-Ce projet est sous licence **MIT**. Vous êtes libre de l'utiliser, l'étudier, le modifier et le redistribuer à condition de **conserver la notice de copyright originale et les crédits d'auteur** dans toutes les copies ou parties substantielles du logiciel. Consultez le fichier [LICENSE](LICENSE) pour plus de détails.
+This project is licensed under the **MIT License**. You are free to use, modify, and redistribute this software provided that the original copyright notice and author credits are retained in all copies or substantial portions of the software. See [LICENSE](LICENSE) for details.
