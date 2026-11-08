@@ -13,11 +13,27 @@ function applyAccountStatus(data) {
     DOM.accountPseudo.textContent = State.loggedIn ? (data.pseudo || '') : '';
 }
 
+function switchSettingsTab(tabName) {
+    const tabs = document.querySelectorAll('.netflix-sidebar-item');
+    const panels = document.querySelectorAll('.netflix-tab-panel');
+    tabs.forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-tab') === tabName);
+    });
+    panels.forEach(panel => {
+        panel.classList.toggle('active', panel.id === `tabPanel-${tabName}`);
+    });
+}
+
 async function openAccountModal() {
     DOM.accountModal.classList.add('open');
     document.body.style.overflow = 'hidden';
     if (typeof renderLangSelectors === 'function') {
         renderLangSelectors();
+    }
+
+    const activeTab = document.querySelector('.netflix-sidebar-item.active');
+    if (!activeTab) {
+        switchSettingsTab('account');
     }
 
     fetch('/api/settings')
@@ -30,7 +46,6 @@ async function openAccountModal() {
         })
         .catch(() => {});
 
-    
     await refreshAccountStatus(true);
     switchAccountMode(State.loggedIn ? 'cloud' : 'local');
 }
@@ -211,6 +226,14 @@ function updateCurrentVersionDisplay(version) {
     if (title) {
         title.textContent = `${t('settings.update_status', 'Version actuelle')} : v${version}`;
     }
+    const badge = document.getElementById('settingsVersionBadge');
+    if (badge) {
+        badge.textContent = `v${version}`;
+    }
+    const infoVer = document.getElementById('settingsInfoVersion');
+    if (infoVer) {
+        infoVer.textContent = `v${version}`;
+    }
 }
 
 async function checkForUpdates(silent = false) {
@@ -244,7 +267,7 @@ async function checkForUpdates(silent = false) {
                     : data.install_kind === 'linux_deb' ? ' (Paquet .deb)'
                     : data.install_kind === 'linux_gui_standalone' ? ' (Portable Linux)'
                     : '';
-                desc.textContent = `🎉 ${t('settings.update_available', 'Nouvelle version')} ${data.latest_version}${kindLabel} ${t('settings.available', 'disponible !')}`;
+                desc.textContent = `${t('settings.update_available', 'Nouvelle version')} ${data.latest_version}${kindLabel} ${t('settings.available', 'disponible !')}`;
                 desc.style.color = '#46d369';
             }
             if (applyBtn) {
@@ -252,7 +275,7 @@ async function checkForUpdates(silent = false) {
                 applyBtn.textContent = `${t('settings.install_update', 'Mettre à jour')} (${data.latest_version})`;
             }
             if (silent) {
-                showToast(`🎉 ${t('settings.update_available', 'Nouvelle version')} ${data.latest_version} ${t('settings.available', 'disponible !')}`);
+                showToast(`${t('settings.update_available', 'Nouvelle version')} ${data.latest_version} ${t('settings.available', 'disponible !')}`);
             }
         } else {
             if (desc) {
@@ -273,7 +296,7 @@ async function checkForUpdates(silent = false) {
     } finally {
         if (!silent && btn) {
             btn.disabled = false;
-            btn.textContent = t('settings.check_updates', '↻ Vérifier');
+            btn.textContent = t('settings.check_updates', 'Vérifier');
         }
     }
 }
@@ -326,7 +349,7 @@ async function runAutoUpdateOnLaunch() {
             : data.install_kind === 'linux_gui_standalone' ? ' (Portable Linux)'
             : '';
 
-        showToast(`🎉 ${t('settings.update_available', 'Nouvelle version')} ${data.latest_version}${kindLabel} détectée. Installation automatique...`);
+        showToast(`${t('settings.update_available', 'Nouvelle version')} ${data.latest_version}${kindLabel} détectée. Installation automatique...`);
 
         const applyRes = await fetch('/api/update/apply', { method: 'POST' });
         const applyData = await applyRes.json();

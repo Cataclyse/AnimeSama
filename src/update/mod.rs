@@ -258,7 +258,7 @@ pub fn check_for_updates() -> Result<UpdateInfo, String> {
         .map(|a| a.as_slice())
         .unwrap_or(&[]);
 
-    let selected = select_asset_for_kind(assets, kind);
+    let selected = select_asset(assets);
     let (asset_name, download_url) = match selected {
         Some((name, url)) => (Some(name.to_string()), Some(url.to_string())),
         None => (None, None),

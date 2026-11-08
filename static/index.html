@@ -448,146 +448,252 @@
 
     <div class="modal-backdrop" id="accountModal">
         <div class="account-container">
-            <button class="modal-close-btn" id="accountCloseBtn" aria-label="Fermer" data-i18n-title="modal.close">✕</button>
-
-            <h2 class="netflix-settings-title" data-i18n="settings.title">Paramètres</h2>
-
-            <div class="netflix-settings-tabs">
-                <button class="netflix-tab-btn active" id="modeCloudBtn" data-mode="cloud" data-i18n="settings.account_tab">Compte Anime-Sama</button>
-                <button class="netflix-tab-btn" id="modeLocalBtn" data-mode="local" data-i18n="settings.local_tab">Stockage Local</button>
-            </div>
-
-            <div class="account-panel" id="panelLocal" style="display:none;">
-                <div class="netflix-settings-row">
-                    <div class="netflix-row-info">
-                        <div class="netflix-row-label" data-i18n="settings.local_storage_label">Stockage sur l'appareil</div>
-                        <div class="netflix-row-desc" data-i18n-html="settings.local_storage_desc">Vos listes, favoris et épisodes vus restent stockés uniquement sur ce PC dans <code>userdata.json</code>. Aucune donnée n'est envoyée sur Internet.</div>
-                    </div>
-                    <div class="netflix-row-action">
-                        <button class="btn-netflix-gray" onclick="openAppDataFolder()" data-i18n="settings.open_appdata_btn">Ouvrir le dossier</button>
-                    </div>
+            <div class="netflix-settings-header">
+                <div class="netflix-settings-brand">
+                    <h2 class="netflix-settings-title" data-i18n="settings.title">Paramètres</h2>
+                    <span class="netflix-settings-badge" id="settingsVersionBadge">v0.1.17</span>
                 </div>
+                <button class="netflix-settings-close" id="accountCloseBtn" onclick="closeAccountModal()" aria-label="Fermer" data-i18n-title="modal.close">✕</button>
             </div>
 
-            <div class="account-panel" id="panelCloudLoggedOut" style="display:none;">
-                <div class="account-forms">
-                    <form id="formAccountLogin" class="account-form active">
-                        <div class="netflix-form-group">
-                            <label class="netflix-form-label" data-i18n="settings.pseudo_label">Pseudo Anime-Sama</label>
-                            <input class="netflix-form-input" type="text" id="accountLoginPseudo" autocomplete="username" placeholder="Pseudo" data-i18n-placeholder="settings.pseudo_placeholder" required>
+            <div class="netflix-settings-body">
+                <nav class="netflix-settings-sidebar">
+                    <div class="netflix-sidebar-nav">
+                        <button class="netflix-sidebar-item active" data-tab="account" onclick="switchSettingsTab('account')">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                            <span data-i18n="settings.tab_account">Compte</span>
+                        </button>
+                        <button class="netflix-sidebar-item" data-tab="sync" onclick="switchSettingsTab('sync')">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            <span data-i18n="settings.tab_sync">Synchronisation</span>
+                        </button>
+                        <button class="netflix-sidebar-item" data-tab="player" onclick="switchSettingsTab('player')">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                            <span data-i18n="settings.tab_player">Lecteur & Ad Shield</span>
+                        </button>
+                        <button class="netflix-sidebar-item" data-tab="language" onclick="switchSettingsTab('language')">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                            <span data-i18n="settings.tab_language">Langues</span>
+                        </button>
+                        <button class="netflix-sidebar-item" data-tab="updates" onclick="switchSettingsTab('updates')">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/><polyline points="21 3 21 9 15 9"/></svg>
+                            <span data-i18n="settings.tab_updates">Mises à jour</span>
+                        </button>
+                    </div>
+                    <div class="netflix-sidebar-footer">Anime-Sama Desktop</div>
+                </nav>
+
+                <div class="netflix-settings-content">
+                    <div class="netflix-tab-panel active" id="tabPanel-account">
+                        <div class="netflix-tab-header">
+                            <h3 class="netflix-tab-title" data-i18n="settings.account_heading">Gestion du compte</h3>
+                            <p class="netflix-tab-subtitle" data-i18n="settings.account_subtitle">Connectez votre compte Anime-Sama ou gérez vos données locales.</p>
                         </div>
-                        <div class="netflix-form-group">
-                            <label class="netflix-form-label" data-i18n="settings.password_label">Mot de passe</label>
-                            <input class="netflix-form-input" type="password" id="accountLoginPassword" autocomplete="current-password" placeholder="Mot de passe" data-i18n-placeholder="settings.password_placeholder" required>
+
+                        <div class="netflix-settings-tabs">
+                            <button class="netflix-tab-btn active" id="modeCloudBtn" data-mode="cloud" data-i18n="settings.account_tab">Compte Anime-Sama</button>
+                            <button class="netflix-tab-btn" id="modeLocalBtn" data-mode="local" data-i18n="settings.local_tab">Stockage Local</button>
                         </div>
-                        <button class="btn-netflix-red" type="submit" data-i18n="settings.login_btn">Se connecter</button>
-                        <p class="netflix-form-subtext"><span data-i18n="settings.no_account_text">Pas de compte ?</span> <a id="toRegisterLink" data-i18n="settings.create_account_link">Créer un compte</a></p>
-                    </form>
 
-                    <form id="formAccountRegister" class="account-form">
-                        <div class="netflix-form-group">
-                            <label class="netflix-form-label" data-i18n="settings.register_pseudo_label">Pseudo souhaité</label>
-                            <input class="netflix-form-input" type="text" id="accountRegisterPseudo" minlength="3" maxlength="30" autocomplete="username" placeholder="Pseudo (3 à 30 car.)" data-i18n-placeholder="settings.register_pseudo_placeholder" required>
+                        <div class="account-panel" id="panelLocal" style="display:none;">
+                            <div class="netflix-settings-row">
+                                <div class="netflix-row-info">
+                                    <div class="netflix-row-label" data-i18n="settings.local_storage_label">Stockage sur l'appareil</div>
+                                    <div class="netflix-row-desc" data-i18n-html="settings.local_storage_desc">Vos listes, favoris et épisodes vus restent stockés uniquement sur ce PC dans <code>userdata.json</code>. Aucune donnée n'est envoyée sur Internet.</div>
+                                </div>
+                                <div class="netflix-row-action">
+                                    <button class="btn-netflix-gray" onclick="openAppDataFolder()" data-i18n="settings.open_appdata_btn">Ouvrir le dossier</button>
+                                </div>
+                            </div>
                         </div>
-                        <div class="netflix-form-group">
-                            <label class="netflix-form-label" data-i18n="settings.register_password_label">Mot de passe (12 car. min, 1 symbole)</label>
-                            <input class="netflix-form-input" type="password" id="accountRegisterPassword" minlength="12" autocomplete="new-password" placeholder="Mot de passe" data-i18n-placeholder="settings.password_placeholder" required>
+
+                        <div class="account-panel" id="panelCloudLoggedOut" style="display:none;">
+                            <div class="account-forms">
+                                <form id="formAccountLogin" class="account-form active">
+                                    <div class="netflix-form-group">
+                                        <label class="netflix-form-label" data-i18n="settings.pseudo_label">Pseudo Anime-Sama</label>
+                                        <input class="netflix-form-input" type="text" id="accountLoginPseudo" autocomplete="username" placeholder="Pseudo" data-i18n-placeholder="settings.pseudo_placeholder" required>
+                                    </div>
+                                    <div class="netflix-form-group">
+                                        <label class="netflix-form-label" data-i18n="settings.password_label">Mot de passe</label>
+                                        <input class="netflix-form-input" type="password" id="accountLoginPassword" autocomplete="current-password" placeholder="Mot de passe" data-i18n-placeholder="settings.password_placeholder" required>
+                                    </div>
+                                    <button class="btn-netflix-red" type="submit" data-i18n="settings.login_btn">Se connecter</button>
+                                    <p class="netflix-form-subtext"><span data-i18n="settings.no_account_text">Pas de compte ?</span> <a id="toRegisterLink" data-i18n="settings.create_account_link">Créer un compte</a></p>
+                                </form>
+
+                                <form id="formAccountRegister" class="account-form">
+                                    <div class="netflix-form-group">
+                                        <label class="netflix-form-label" data-i18n="settings.register_pseudo_label">Pseudo souhaité</label>
+                                        <input class="netflix-form-input" type="text" id="accountRegisterPseudo" minlength="3" maxlength="30" autocomplete="username" placeholder="Pseudo (3 à 30 car.)" data-i18n-placeholder="settings.register_pseudo_placeholder" required>
+                                    </div>
+                                    <div class="netflix-form-group">
+                                        <label class="netflix-form-label" data-i18n="settings.register_password_label">Mot de passe (12 car. min, 1 symbole)</label>
+                                        <input class="netflix-form-input" type="password" id="accountRegisterPassword" minlength="12" autocomplete="new-password" placeholder="Mot de passe" data-i18n-placeholder="settings.password_placeholder" required>
+                                    </div>
+                                    <div class="netflix-form-group">
+                                        <label class="netflix-form-label" data-i18n="settings.register_confirm_label">Confirmer le mot de passe</label>
+                                        <input class="netflix-form-input" type="password" id="accountRegisterPassword2" minlength="12" autocomplete="new-password" placeholder="Confirmer" data-i18n-placeholder="settings.confirm_placeholder" required>
+                                    </div>
+                                    <button class="btn-netflix-red" type="submit" data-i18n="settings.register_btn">Créer le compte</button>
+                                    <p class="netflix-form-subtext"><span data-i18n="settings.already_account_text">Déjà un compte ?</span> <a id="toLoginLink" data-i18n="settings.login_link">Se connecter</a></p>
+                                </form>
+                            </div>
+                            <p class="account-error" id="accountError" style="display:none;"></p>
                         </div>
-                        <div class="netflix-form-group">
-                            <label class="netflix-form-label" data-i18n="settings.register_confirm_label">Confirmer le mot de passe</label>
-                            <input class="netflix-form-input" type="password" id="accountRegisterPassword2" minlength="12" autocomplete="new-password" placeholder="Confirmer" data-i18n-placeholder="settings.confirm_placeholder" required>
+
+                        <div class="account-panel" id="panelCloudLoggedIn" style="display:none;">
+                            <div class="netflix-settings-row">
+                                <div class="netflix-row-info">
+                                    <div class="netflix-row-label" id="accountPseudo">Utilisateur</div>
+                                    <div class="netflix-row-desc" data-i18n="settings.account_connected_desc">Compte anime-sama.to connecté</div>
+                                </div>
+                                <div class="netflix-row-action">
+                                    <button class="netflix-link-btn" id="accountLogoutBtn" data-i18n="settings.disconnect">Se déconnecter</button>
+                                </div>
+                            </div>
                         </div>
-                        <button class="btn-netflix-red" type="submit" data-i18n="settings.register_btn">Créer le compte</button>
-                        <p class="netflix-form-subtext"><span data-i18n="settings.already_account_text">Déjà un compte ?</span> <a id="toLoginLink" data-i18n="settings.login_link">Se connecter</a></p>
-                    </form>
-                </div>
-                <p class="account-error" id="accountError" style="display:none;"></p>
-            </div>
+                    </div>
 
-            <div class="account-panel" id="panelCloudLoggedIn" style="display:none;">
-                <div class="netflix-section-heading" data-i18n="settings.section_account">COMPTE</div>
-                <div class="netflix-settings-row">
-                    <div class="netflix-row-info">
-                        <div class="netflix-row-label" id="accountPseudo">Utilisateur</div>
-                        <div class="netflix-row-desc" data-i18n="settings.account_connected_desc">Compte anime-sama.to connecté</div>
-                    </div>
-                    <div class="netflix-row-action">
-                        <button class="netflix-link-btn" id="accountLogoutBtn" data-i18n="settings.disconnect">Se déconnecter</button>
-                    </div>
-                </div>
+                    <div class="netflix-tab-panel" id="tabPanel-sync">
+                        <div class="netflix-tab-header">
+                            <h3 class="netflix-tab-title" data-i18n="settings.sync_heading">Synchronisation Cloud</h3>
+                            <p class="netflix-tab-subtitle" data-i18n="settings.sync_subtitle">Gérez la synchronisation de vos favoris et épisodes vus avec anime-sama.to.</p>
+                        </div>
 
-                <div class="netflix-section-heading" data-i18n="settings.section_sync">SYNCHRONISATION</div>
-                <div class="netflix-settings-row">
-                    <div class="netflix-row-info">
-                        <div class="netflix-row-label" data-i18n="settings.auto_sync">Synchronisation automatique</div>
-                        <div class="netflix-row-desc" data-i18n="settings.auto_sync_desc">Garde automatiquement vos épisodes vus synchronisés à chaque lecture</div>
-                    </div>
-                    <div class="netflix-row-action">
-                        <label class="netflix-toggle">
-                            <input type="checkbox" id="autoSyncCheckbox">
-                            <span class="netflix-toggle-track"></span>
-                        </label>
-                    </div>
-                </div>
+                        <div class="netflix-settings-row">
+                            <div class="netflix-row-info">
+                                <div class="netflix-row-label" data-i18n="settings.auto_sync">Synchronisation automatique</div>
+                                <div class="netflix-row-desc" data-i18n="settings.auto_sync_desc">Garde automatiquement vos épisodes vus synchronisés à chaque lecture</div>
+                            </div>
+                            <div class="netflix-row-action">
+                                <label class="netflix-toggle">
+                                    <input type="checkbox" id="autoSyncCheckbox">
+                                    <span class="netflix-toggle-track"></span>
+                                </label>
+                            </div>
+                        </div>
 
-                <div class="netflix-settings-row">
-                    <div class="netflix-row-info">
-                        <div class="netflix-row-label" data-i18n="settings.sync_now">Mettre à jour maintenant</div>
-                        <div class="netflix-row-desc" id="syncStatus" data-i18n="settings.sync_ready">Synchronisation prête</div>
-                    </div>
-                    <div class="netflix-row-action">
-                        <button class="btn-netflix-gray" id="syncAutoBtn" data-i18n="settings.sync_btn">Synchroniser</button>
-                    </div>
-                </div>
-            </div>
+                        <div class="netflix-settings-row">
+                            <div class="netflix-row-info">
+                                <div class="netflix-row-label" data-i18n="settings.sync_now">Mettre à jour maintenant</div>
+                                <div class="netflix-row-desc" id="syncStatus" data-i18n="settings.sync_ready">Synchronisation prête</div>
+                            </div>
+                            <div class="netflix-row-action">
+                                <button class="btn-netflix-gray" id="syncAutoBtn" data-i18n="settings.sync_btn">Synchroniser</button>
+                            </div>
+                        </div>
 
-            <div class="netflix-section-heading" data-i18n="settings.section_player">LECTEUR & EXPÉRIENCE</div>
-            <div class="netflix-settings-row">
-                <div class="netflix-row-info">
-                    <div class="netflix-row-label" data-i18n="settings.ad_shield">Ad Shield (uBlock & Privacy Badger)</div>
-                    <div class="netflix-row-desc" data-i18n="settings.ad_shield_desc">Bloque les popups, publicités et fausses alertes sur VOE, VidMoly et Uqload</div>
-                </div>
-                <div class="netflix-row-action">
-                    <label class="netflix-toggle">
-                        <input type="checkbox" id="adShieldCheckbox" checked>
-                        <span class="netflix-toggle-track"></span>
-                    </label>
-                </div>
-            </div>
-            <div class="netflix-section-heading" data-i18n="settings.section_language">LANGUE DU LOGICIEL</div>
-            <div class="netflix-settings-row">
-                <div class="netflix-row-info">
-                    <div class="netflix-row-label" data-i18n="settings.language_label">Langue de l'interface</div>
-                    <div class="netflix-row-desc" data-i18n="settings.language_desc">Sélectionnez la langue des menus et des textes (.lang)</div>
-                </div>
-                <div class="netflix-row-action" style="display: flex; gap: 8px;">
-                    <button class="btn-netflix-gray" onclick="openLangFolder()" data-i18n="settings.open_lang_folder">📁 Dossier .lang</button>
-                    <button class="btn-netflix-gray" onclick="refreshLanguages()" title="Recharger les langues" data-i18n-title="settings.refresh_lang">↻</button>
-                </div>
-            </div>
-            <div class="settings-lang-grid" id="settingsLangGrid"></div>
+                        <div class="netflix-card">
+                            <div class="netflix-card-title">État de la synchronisation</div>
+                            <div class="netflix-card-row">
+                                <span>Serveur distant</span>
+                                <strong>anime-sama.to</strong>
+                            </div>
+                            <div class="netflix-card-row">
+                                <span>Protocole</span>
+                                <span>Bidirectionnel sécurisé</span>
+                            </div>
+                        </div>
+                    </div>
 
-            <div class="netflix-section-heading" data-i18n="settings.section_updates">MISES À JOUR DU LOGICIEL</div>
-            <div class="netflix-settings-row">
-                <div class="netflix-row-info">
-                    <div class="netflix-row-label" id="updateStatusTitle" data-i18n="settings.update_status">Version actuelle</div>
-                    <div class="netflix-row-desc" id="updateStatusDesc" data-i18n="settings.update_desc">Vérifiez si une nouvelle version est disponible sur GitHub</div>
-                </div>
-                <div class="netflix-row-action" style="display: flex; gap: 8px;">
-                    <button class="btn-netflix-gray" id="checkUpdateBtn" onclick="checkForUpdatesManual()" data-i18n="settings.check_updates">↻ Vérifier</button>
-                    <button class="btn-netflix-primary" id="applyUpdateBtn" onclick="applyUpdateDirect()" style="display: none;" data-i18n="settings.install_update">Mettre à jour</button>
-                </div>
-            </div>
-            <div class="netflix-settings-row">
-                <div class="netflix-row-info">
-                    <div class="netflix-row-label" data-i18n="settings.auto_update">Mise à jour automatique</div>
-                    <div class="netflix-row-desc" data-i18n="settings.auto_update_desc">Recherche et applique automatiquement les nouvelles versions au lancement</div>
-                </div>
-                <div class="netflix-row-action">
-                    <label class="netflix-toggle">
-                        <input type="checkbox" id="autoUpdateCheckbox" checked>
-                        <span class="netflix-toggle-track"></span>
-                    </label>
+                    <div class="netflix-tab-panel" id="tabPanel-player">
+                        <div class="netflix-tab-header">
+                            <h3 class="netflix-tab-title" data-i18n="settings.player_heading">Lecteur & Ad Shield</h3>
+                            <p class="netflix-tab-subtitle" data-i18n="settings.player_subtitle">Configuration du lecteur vidéo et du bouclier anti-publicités intégré.</p>
+                        </div>
+
+                        <div class="netflix-settings-row">
+                            <div class="netflix-row-info">
+                                <div class="netflix-row-label" data-i18n="settings.ad_shield">Ad Shield (uBlock & Privacy Badger)</div>
+                                <div class="netflix-row-desc" data-i18n="settings.ad_shield_desc">Bloque les popups, publicités et fausses alertes sur VOE, VidMoly et Uqload</div>
+                            </div>
+                            <div class="netflix-row-action">
+                                <label class="netflix-toggle">
+                                    <input type="checkbox" id="adShieldCheckbox" checked>
+                                    <span class="netflix-toggle-track"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="netflix-card">
+                            <div class="netflix-card-title">Protection active</div>
+                            <div class="netflix-card-row">
+                                <span>Lecteurs protégés</span>
+                                <strong>VOE, VidMoly, Uqload</strong>
+                            </div>
+                            <div class="netflix-card-row">
+                                <span>Proxy local</span>
+                                <span class="netflix-badge-green">Actif (127.0.0.1)</span>
+                            </div>
+                            <div class="netflix-card-row">
+                                <span>Isolation sandbox</span>
+                                <span>Scripts tiers neutralisés</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="netflix-tab-panel" id="tabPanel-language">
+                        <div class="netflix-tab-header">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;">
+                                <div>
+                                    <h3 class="netflix-tab-title" data-i18n="settings.language_heading">Langue de l'interface</h3>
+                                    <p class="netflix-tab-subtitle" data-i18n="settings.language_desc">Sélectionnez la langue des menus et des textes (.lang).</p>
+                                </div>
+                                <div style="display: flex; gap: 8px; flex-shrink: 0;">
+                                    <button class="btn-netflix-gray" onclick="openLangFolder()" data-i18n="settings.open_lang_folder">Dossier .lang</button>
+                                    <button class="btn-netflix-gray btn-icon-only" onclick="refreshLanguages()" title="Recharger les langues" data-i18n-title="settings.refresh_lang" aria-label="Recharger">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="settings-lang-grid" id="settingsLangGrid"></div>
+                    </div>
+
+                    <div class="netflix-tab-panel" id="tabPanel-updates">
+                        <div class="netflix-tab-header">
+                            <h3 class="netflix-tab-title" data-i18n="settings.updates_heading">Mises à jour du logiciel</h3>
+                            <p class="netflix-tab-subtitle" data-i18n="settings.updates_subtitle">Maintenez Anime-Sama à jour pour bénéficier des derniers correctifs et fonctionnalités.</p>
+                        </div>
+
+                        <div class="netflix-settings-row">
+                            <div class="netflix-row-info">
+                                <div class="netflix-row-label" id="updateStatusTitle" data-i18n="settings.update_status">Version actuelle</div>
+                                <div class="netflix-row-desc" id="updateStatusDesc" data-i18n="settings.update_desc">Vérifiez si une nouvelle version est disponible sur GitHub</div>
+                            </div>
+                            <div class="netflix-row-action" style="display: flex; gap: 8px;">
+                                <button class="btn-netflix-gray" id="checkUpdateBtn" onclick="checkForUpdatesManual()" data-i18n="settings.check_updates">Vérifier</button>
+                                <button class="btn-netflix-primary" id="applyUpdateBtn" onclick="applyUpdateDirect()" style="display: none;" data-i18n="settings.install_update">Mettre à jour</button>
+                            </div>
+                        </div>
+
+                        <div class="netflix-settings-row">
+                            <div class="netflix-row-info">
+                                <div class="netflix-row-label" data-i18n="settings.auto_update">Mise à jour automatique</div>
+                                <div class="netflix-row-desc" data-i18n="settings.auto_update_desc">Recherche et applique automatiquement les nouvelles versions au lancement</div>
+                            </div>
+                            <div class="netflix-row-action">
+                                <label class="netflix-toggle">
+                                    <input type="checkbox" id="autoUpdateCheckbox" checked>
+                                    <span class="netflix-toggle-track"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="netflix-card">
+                            <div class="netflix-card-title">Informations système</div>
+                            <div class="netflix-card-row">
+                                <span>Version installée</span>
+                                <strong id="settingsInfoVersion">v0.1.17</strong>
+                            </div>
+                            <div class="netflix-card-row">
+                                <span>Canal de mise à jour</span>
+                                <span>GitHub Releases (Cataclyse/AnimeSama)</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
