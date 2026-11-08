@@ -147,6 +147,9 @@ function updateAppTitle(isPlaying) {
 }
 
 async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) {
+    if (typeof unDismissContinue === 'function') {
+        unDismissContinue(slug);
+    }
     try {
         if (!State.currentAnime || State.currentAnime.slug !== slug) {
             try {

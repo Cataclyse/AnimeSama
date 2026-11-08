@@ -64,6 +64,9 @@ pub fn run_auto_sync(state: &Arc<AppState>) -> Result<serde_json::Value, String>
     
     
     for cloud_entry in &cloud_entries {
+        if local.dismissed_continue.iter().any(|s| s == &cloud_entry.slug) {
+            continue;
+        }
         let local_num = local_by_slug.get(&cloud_entry.slug).map(|h| h.episode);
         if local_num.is_none() || cloud_entry.episode > local_num.unwrap() {
             let entry = HistoryEntry {

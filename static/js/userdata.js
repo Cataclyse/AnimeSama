@@ -53,7 +53,19 @@ function updateWatchlistCount() {
     DOM.watchlistCount.textContent = count;
 }
 
+function unDismissContinue(slug) {
+    if (!slug) return;
+    try {
+        let dismissed = JSON.parse(localStorage.getItem('as_dismissed_continue') || '[]');
+        if (dismissed.includes(slug)) {
+            dismissed = dismissed.filter(s => s !== slug);
+            localStorage.setItem('as_dismissed_continue', JSON.stringify(dismissed));
+        }
+    } catch (e) {}
+}
+
 async function recordHistory(slug, epNumber) {
+    unDismissContinue(slug);
     try {
         const res = await fetch('/api/history', {
             method: 'POST',
@@ -76,6 +88,15 @@ async function recordHistory(slug, epNumber) {
 async function removeContinueItem(slug) {
     if (!slug) return;
     try {
+        let dismissed = [];
+        try {
+            dismissed = JSON.parse(localStorage.getItem('as_dismissed_continue') || '[]');
+        } catch (_) {}
+        if (!dismissed.includes(slug)) {
+            dismissed.push(slug);
+            localStorage.setItem('as_dismissed_continue', JSON.stringify(dismissed));
+        }
+
         localStorage.removeItem('as_progress_' + slug);
         const prefix = `as_ep_progress_${slug}_`;
         const toDelete = [];
@@ -84,6 +105,12 @@ async function removeContinueItem(slug) {
             if (k && k.startsWith(prefix)) toDelete.push(k);
         }
         toDelete.forEach(k => localStorage.removeItem(k));
+
+        if (State.currentEpisodes && State.currentEpisodes.slug === slug) {
+            State.currentEpisodes = null;
+            State.lastCurrentTime = 0;
+            State.lastDuration = 0;
+        }
     } catch (e) {}
 
     try {

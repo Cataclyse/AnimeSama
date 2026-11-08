@@ -266,11 +266,21 @@ function resumeAnimePlayback(slug, season, epIdx, curTime) {
 }
 
 function renderContinueWatchingRow() {
+    const oldRow = document.querySelector('.continue-row');
+    if (oldRow) oldRow.remove();
+
+    let dismissed = [];
+    try {
+        dismissed = JSON.parse(localStorage.getItem('as_dismissed_continue') || '[]');
+    } catch (_) {}
+    const backendDismissed = (State.userData && State.userData.dismissed_continue) ? State.userData.dismissed_continue : [];
+    const isDismissed = (s) => dismissed.includes(s) || backendDismissed.includes(s);
+
     const history = (State.userData && State.userData.history) ? State.userData.history : [];
     const continueMap = new Map();
 
     for (const h of history) {
-        if (!h.slug) continue;
+        if (!h.slug || isDismissed(h.slug)) continue;
         const savedProg = (typeof getPlaybackProgress === 'function') ? getPlaybackProgress(h.slug) : null;
         const ep = (savedProg && savedProg.episode) ? savedProg.episode : (h.episode || 1);
         const season = (savedProg && savedProg.season) ? savedProg.season : (h.season || 'saison1/vostfr');
@@ -308,7 +318,7 @@ function renderContinueWatchingRow() {
             const key = localStorage.key(i);
             if (key && key.startsWith('as_progress_')) {
                 const slug = key.substring('as_progress_'.length);
-                if (slug && !continueMap.has(slug)) {
+                if (slug && !isDismissed(slug) && !continueMap.has(slug)) {
                     try {
                         const savedProg = JSON.parse(localStorage.getItem(key));
                         if (savedProg && (savedProg.currentTime > 5 || savedProg.episode)) {

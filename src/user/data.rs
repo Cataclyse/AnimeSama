@@ -18,6 +18,8 @@ pub struct UserData {
     pub favorites: Vec<String>,
     pub history: Vec<HistoryEntry>,
     #[serde(default)]
+    pub dismissed_continue: Vec<String>,
+    #[serde(default)]
     pub auto_sync: bool,
     #[serde(default = "default_true")]
     pub ad_shield: bool,
@@ -37,6 +39,7 @@ impl Default for UserData {
             watchlist: Vec::new(),
             favorites: Vec::new(),
             history: Vec::new(),
+            dismissed_continue: Vec::new(),
             auto_sync: false,
             ad_shield: true,
             auto_update: true,
@@ -143,6 +146,7 @@ impl UserManager {
 
     pub fn add_history(&self, entry: HistoryEntry) -> UserData {
         let mut d = self.data.lock().unwrap();
+        d.dismissed_continue.retain(|s| s != &entry.slug);
         d.history.retain(|h| h.slug != entry.slug);
         d.history.insert(0, entry);
         if d.history.len() > 50 {
@@ -157,6 +161,9 @@ impl UserManager {
     pub fn remove_history(&self, slug: &str) -> UserData {
         let mut d = self.data.lock().unwrap();
         d.history.retain(|h| h.slug != slug);
+        if !d.dismissed_continue.iter().any(|s| s == slug) {
+            d.dismissed_continue.push(slug.to_string());
+        }
         let snapshot = d.clone();
         drop(d);
         self.save(&snapshot);
@@ -165,7 +172,10 @@ impl UserManager {
 
     fn save(&self, data: &UserData) {
         if let Ok(json) = serde_json::to_string_pretty(data) {
-            let _ = fs::write(&self.file_path, json);
+            let _ = fs::write(&self.file_path, &json);
+            if self.file_path != "userdata.json" && Path::new("userdata.json").exists() {
+                let _ = fs::write("userdata.json", &json);
+            }
         }
     }
 }
