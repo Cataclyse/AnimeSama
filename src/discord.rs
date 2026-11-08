@@ -91,11 +91,8 @@ pub fn init_discord_rpc() {
                                         .unwrap_or_default()
                                         .as_secs();
                                     let start_ts = now_secs.saturating_sub(cur);
-                                    let end_ts = start_ts + dur;
                                     act = act.timestamps(
-                                        activity::Timestamps::new()
-                                            .start(start_ts as i64)
-                                            .end(end_ts as i64),
+                                        activity::Timestamps::new().start(start_ts as i64),
                                     );
                                 }
                             }
