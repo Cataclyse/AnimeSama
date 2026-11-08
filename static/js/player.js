@@ -35,8 +35,12 @@ function syncDiscordRpc(force = false) {
         if (lastDiscordRpcStatus !== currentStatus || lastDiscordRpcEpisode !== epNum) {
             force = true;
         } else if (currentStatus === 'playing') {
+            // Discord affiche l'elapsed en continu a partir du timestamp de depart :
+            // on ne renvoie une update que sur un vrai seek, jamais pour la derive naturelle
+            // de lecture (sinon le timestamp est recalcule a chaque fois et Discord throttle
+            // les mises a jour, ce qui donne l'impression de sauts toutes les ~15s).
             const expectedTime = lastDiscordRpcCurrentTime + (now - lastDiscordRpcTimeRecordedAt) / 1000;
-            if (Math.abs(curTime - expectedTime) > 3) {
+            if (Math.abs(curTime - expectedTime) > 10) {
                 force = true;
             }
         }
@@ -54,6 +58,7 @@ function syncDiscordRpc(force = false) {
 
     const animeTitle = State.currentAnime ? State.currentAnime.title : (State.currentEpisodes ? State.currentEpisodes.slug : '');
     const season = State.currentEpisodes ? State.currentEpisodes.season : null;
+    const poster = State.currentAnime ? State.currentAnime.banner : null;
 
     fetch('/api/rpc/presence', {
         method: 'POST',
@@ -64,7 +69,8 @@ function syncDiscordRpc(force = false) {
             season: season,
             status: currentStatus,
             duration: Math.floor(playerState.duration || 0),
-            current_time: Math.floor(curTime)
+            current_time: Math.floor(curTime),
+            poster: poster
         })
     }).catch(() => {});
 }

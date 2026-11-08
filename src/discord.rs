@@ -15,6 +15,8 @@ pub struct PresencePayload {
     pub status: String,
     pub duration: Option<u64>,
     pub current_time: Option<u64>,
+    #[serde(default)]
+    pub poster: Option<String>,
 }
 
 enum RpcCommand {
@@ -34,6 +36,7 @@ pub fn init_discord_rpc() {
     thread::spawn(move || {
         let mut client: Option<DiscordIpcClient> = None;
         let mut last_connect_attempt = Instant::now() - Duration::from_secs(60);
+        let mut cached_start_ts: Option<u64> = None;
 
         while let Ok(cmd) = rx.recv() {
             match cmd {
@@ -71,10 +74,16 @@ pub fn init_discord_rpc() {
                             state_parts.join(" • ")
                         };
                         act = act.state(&state_str);
+                        act = act.activity_type(activity::ActivityType::Watching);
 
+                        let large_image = payload
+                            .poster
+                            .as_deref()
+                            .filter(|p| !p.is_empty())
+                            .unwrap_or("animesama_logo");
                         let mut assets = activity::Assets::new()
-                            .large_image("animesama_logo")
-                            .large_text("Anime-Sama");
+                            .large_image(large_image)
+                            .large_text(details_text.clone());
 
                         if payload.status == "playing" {
                             assets = assets.small_image("play").small_text("En lecture");
@@ -90,12 +99,37 @@ pub fn init_discord_rpc() {
                                         .duration_since(std::time::UNIX_EPOCH)
                                         .unwrap_or_default()
                                         .as_secs();
-                                    let start_ts = now_secs.saturating_sub(cur);
+                                    let computed_start = now_secs.saturating_sub(cur);
+
+                                    // Ne recalcule le timestamp de depart que si l'ecart avec
+                                    // celui deja envoye est significatif (seek, reprise apres
+                                    // pause...). Sinon on garde le meme timestamp pour laisser
+                                    // Discord faire defiler l'elapsed tout seul, sans le
+                                    // throttle qu'introduirait un SET_ACTIVITY trop frequent.
+                                    let start_ts = match cached_start_ts {
+                                        Some(prev)
+                                            if (prev as i64 - computed_start as i64).abs() < 5 =>
+                                        {
+                                            prev
+                                        }
+                                        _ => computed_start,
+                                    };
+                                    cached_start_ts = Some(start_ts);
+                                    let end_ts = start_ts + dur;
+
+                                    // Avec ActivityType::Watching + start ET end, Discord
+                                    // affiche une vraie barre de progression media (comme
+                                    // Spotify) qui defile en continu, au lieu d'un simple
+                                    // compteur elapsed.
                                     act = act.timestamps(
-                                        activity::Timestamps::new().start(start_ts as i64),
+                                        activity::Timestamps::new()
+                                            .start(start_ts as i64)
+                                            .end(end_ts as i64),
                                     );
                                 }
                             }
+                        } else {
+                            cached_start_ts = None;
                         }
 
                         let btn = activity::Button::new("Regarder sur Anime-Sama", "https://anime-sama.to");
