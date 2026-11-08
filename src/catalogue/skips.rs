@@ -28,8 +28,29 @@ fn get_skips_cache() -> &'static Mutex<HashMap<String, SkipResponse>> {
     SKIPS_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+pub fn clean_anime_title(title: &str) -> String {
+    let lower = title.to_lowercase();
+    let cleaned = lower
+        .replace("(tv)", "")
+        .replace("(vf)", "")
+        .replace("(vostfr)", "");
+    let mut parts: Vec<&str> = Vec::new();
+    for token in cleaned.split_whitespace() {
+        if token.starts_with("saison") || token.starts_with("season") {
+            break;
+        }
+        parts.push(token);
+    }
+    let res = parts.join(" ").trim().to_string();
+    if res.is_empty() {
+        title.trim().to_string()
+    } else {
+        res
+    }
+}
+
 pub fn resolve_mal_id(title: &str) -> Option<u64> {
-    let clean = title.trim();
+    let clean = clean_anime_title(title);
     if clean.is_empty() {
         return None;
     }

@@ -744,25 +744,25 @@ function checkSkipIntro(currentTime) {
         const op = playerState.skipData.op;
         const ed = playerState.skipData.ed;
 
-        if (op && currentTime >= op.start - 0.5 && currentTime < op.end) {
+        if (op && currentTime >= (op.start - 1.0) && currentTime < (op.end - 1.0)) {
             skipBtn.style.display = 'flex';
             skipBtn.dataset.skipTarget = op.end;
             skipBtn.dataset.skipType = 'op';
             const labelEl = skipBtn.querySelector('[data-i18n]');
             if (labelEl) labelEl.textContent = "Passer l'intro";
             const badgeEl = skipBtn.querySelector('.netflix-skip-intro-badge');
-            if (badgeEl) badgeEl.textContent = 'Auto';
+            if (badgeEl) badgeEl.textContent = `${formatPlayerTime(op.start)} → ${formatPlayerTime(op.end)}`;
             return;
         }
 
-        if (ed && currentTime >= ed.start - 0.5 && currentTime < ed.end) {
+        if (ed && currentTime >= (ed.start - 1.0) && currentTime < (ed.end - 1.0)) {
             skipBtn.style.display = 'flex';
             skipBtn.dataset.skipTarget = ed.end;
             skipBtn.dataset.skipType = 'ed';
             const labelEl = skipBtn.querySelector('[data-i18n]');
             if (labelEl) labelEl.textContent = "Passer l'ending";
             const badgeEl = skipBtn.querySelector('.netflix-skip-intro-badge');
-            if (badgeEl) badgeEl.textContent = 'Auto';
+            if (badgeEl) badgeEl.textContent = `${formatPlayerTime(ed.start)} → ${formatPlayerTime(ed.end)}`;
             return;
         }
 
@@ -776,7 +776,7 @@ function checkSkipIntro(currentTime) {
         }
     }
 
-    if (playerState.fallbackSkippedAt === null && currentTime >= 5 && currentTime <= 210) {
+    if (playerState.fallbackSkippedAt === null && currentTime >= 45 && currentTime <= 210) {
         skipBtn.style.display = 'flex';
         skipBtn.dataset.skipTarget = 'relative_85';
         skipBtn.dataset.skipType = 'fallback';
