@@ -35,6 +35,41 @@ jobs:
           cargo build --release --no-default-features
           cp target/release/animesama animesama-linux-server
 
+      - name: Package Debian Package
+        run: |
+          mkdir -p deb/DEBIAN deb/usr/bin deb/usr/share/applications deb/usr/share/icons/hicolor/256x256/apps
+          cp animesama-linux-gui deb/usr/bin/animesama
+          chmod 755 deb/usr/bin/animesama
+          cp assets/icon.png deb/usr/share/icons/hicolor/256x256/apps/animesama.png
+
+          cat << 'EOF' > deb/usr/share/applications/animesama.desktop
+          [Desktop Entry]
+          Name=Anime-Sama
+          Comment=Anime-Sama Desktop - Netflix Edition
+          Exec=/usr/bin/animesama
+          Icon=animesama
+          Terminal=false
+          Type=Application
+          Categories=AudioVideo;Video;Player;
+          StartupWMClass=animesama
+          EOF
+          chmod 644 deb/usr/share/applications/animesama.desktop
+
+          cat << 'EOF' > deb/DEBIAN/control
+          Package: animesama
+          Version: 0.1.0
+          Section: video
+          Priority: optional
+          Architecture: amd64
+          Maintainer: Cataclyse
+          Depends: libwebkit2gtk-4.1-0, libgtk-3-0
+          Description: Anime-Sama Desktop - Netflix Edition
+           Application desktop moderne en Rust offrant une interface Netflix pour Anime-Sama.
+          EOF
+          chmod 644 deb/DEBIAN/control
+
+          dpkg-deb --build deb animesama_0.1.0_amd64.deb
+
       - name: Package Linux
         run: |
           mkdir -p dist-linux-gui dist-linux-server
@@ -53,6 +88,7 @@ jobs:
           path: |
             animesama-linux-gui
             animesama-linux-server
+            animesama_0.1.0_amd64.deb
             animesama-linux-gui-x86_64.tar.gz
             animesama-linux-server-x86_64.tar.gz
 
@@ -123,6 +159,7 @@ jobs:
           prerelease: false
           generate_release_notes: true
           files: |
+            release-assets/animesama_0.1.0_amd64.deb
             release-assets/animesama-linux-gui
             release-assets/animesama-linux-server
             release-assets/animesama-linux-gui-x86_64.tar.gz
