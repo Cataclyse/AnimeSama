@@ -47,7 +47,22 @@ fn main() {
     println!("  ANIME-SAMA (RUST)");
     println!("==================================================");
 
-    let port = find_available_port(48567);
+    let port = match env::var("ANIMESAMA_PORT") {
+        Ok(value) => match value.parse::<u16>() {
+            Ok(port) if port != 0 => port,
+            _ => {
+                eprintln!(
+                    "[Erreur] ANIMESAMA_PORT doit être compris entre 1 et 65535."
+                );
+                std::process::exit(2);
+            }
+        },
+        Err(env::VarError::NotPresent) => find_available_port(48567),
+        Err(error) => {
+            eprintln!("[Erreur] Lecture ANIMESAMA_PORT: {error}");
+            std::process::exit(2);
+        }
+    };
     let app_url = format!("http://127.0.0.1:{}", port);
 
     discord::init_discord_rpc();

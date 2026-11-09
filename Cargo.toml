@@ -1,6 +1,6 @@
 [package]
 name = "animesama"
-version = "0.1.24"
+version = "0.1.35"
 edition = "2021"
 authors = ["Cataclyse"]
 license = "MIT"
