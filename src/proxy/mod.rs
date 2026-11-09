@@ -1,3 +1,4 @@
+pub mod security;
 pub mod fetcher;
 pub mod rewriter;
 
@@ -65,6 +66,11 @@ pub fn handle_proxy_request(req: tiny_http::Request, raw_path: &str, query: &str
             let _ = req.respond(resp);
             return;
         }
+    }
+
+    if let Err(reason) = security::validate_proxy_url(&target) {
+        respond_text(req, 403, reason);
+        return;
     }
 
     match fetch_following_redirects(&target, host, 6) {
