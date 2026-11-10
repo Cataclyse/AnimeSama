@@ -10,3 +10,5 @@ pub use data::{HistoryEntry, UserData, UserManager};
 pub use paths::*;
 
 pub use self::data::PlaybackPosition;
+
+pub mod accounts;
