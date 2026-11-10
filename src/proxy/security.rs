@@ -6,6 +6,9 @@ use url::Url;
 const TRUSTED_HOSTS: &[&str] = &[
     "anime-sama.to",
     "voe.sx",
+    "teresapoliticallearn.com",
+    "megankiddifference.com",
+    "claireguessthousand.com",
     "uqload.to",
     "uqload.com",
     "uqload.io",
@@ -22,6 +25,8 @@ const TRUSTED_HOSTS: &[&str] = &[
     "sibnet.ru",
     "sendvid.com",
     "earnvids.com",
+    "minochinos.com",
+    "callistanise.com",
     "streamtape.com",
     "doodstream.com",
     "filemoon.sx",
@@ -117,6 +122,64 @@ mod tests {
     #[test]
     fn accepts_trusted_video_hosts() {
         assert!(validate_proxy_url("https://voe.sx/e/123").is_ok());
+        assert!(validate_proxy_url(
+            "https://claireguessthousand.com/e/test"
+        ).is_ok());
+
+        assert!(validate_proxy_url(
+            "https://claireguessthousand.com.evil.example/e/test"
+        ).is_err());
+
+        assert!(validate_proxy_url(
+            "http://claireguessthousand.com/e/test"
+        ).is_err());
+
+        assert!(validate_proxy_url(
+            "https://megankiddifference.com/embed/test"
+        ).is_ok());
+
+        assert!(validate_proxy_url(
+            "https://megankiddifference.com.evil.example/embed/test"
+        ).is_err());
+
+        assert!(validate_proxy_url(
+            "http://megankiddifference.com/embed/test"
+        ).is_err());
+
+        assert!(validate_proxy_url(
+            "https://callistanise.com/embed/test"
+        ).is_ok());
+
+        assert!(validate_proxy_url(
+            "https://callistanise.com.evil.example/embed/test"
+        ).is_err());
+
+        assert!(validate_proxy_url(
+            "http://callistanise.com/embed/test"
+        ).is_err());
+
+        assert!(validate_proxy_url(
+            "https://minochinos.com/embed/test"
+        ).is_ok());
+
+        assert!(validate_proxy_url(
+            "https://minochinos.com.evil.example/embed/test"
+        ).is_err());
+
+        assert!(validate_proxy_url(
+            "http://minochinos.com/embed/test"
+        ).is_err());
+        assert!(validate_proxy_url(
+            "https://teresapoliticallearn.com/e/test"
+        ).is_ok());
+
+        assert!(validate_proxy_url(
+            "https://teresapoliticallearn.com.evil.example/e/test"
+        ).is_err());
+
+        assert!(validate_proxy_url(
+            "http://teresapoliticallearn.com/e/test"
+        ).is_err());
         assert!(validate_proxy_url("https://uqload.to/embed/123").is_ok());
         assert!(validate_proxy_url("https://cdn.vidmoly.to/video").is_ok());
     }

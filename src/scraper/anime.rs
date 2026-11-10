@@ -20,14 +20,17 @@ pub struct AnimeDetails {
 pub fn fetch_anime_details(slug: &str) -> Result<AnimeDetails, String> {
     let clean_slug = slug.trim().trim_matches('/');
 
-    let url = format!("https://anime-sama.to/catalogue/{}/", clean_slug);
-    let resp = ureq::get(&url)
-        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        .timeout(std::time::Duration::from_secs(8))
-        .call()
-        .map_err(|e| format!("Erreur réseau pour {}: {}", url, e))?;
+    if !super::http::valid_slug(clean_slug) {
+        return Err("Slug du catalogue invalide".to_string());
+    }
 
-    let html = resp.into_string().map_err(|e| format!("Erreur lecture réponse: {}", e))?;
+    let url = format!("https://anime-sama.to/catalogue/{}/", clean_slug);
+    let html = super::http::fetch_site_text(
+    &url,
+    8,
+    4 * 1024 * 1024,
+    None,
+)?;
 
     let title_re = Regex::new(r#"<h1[^>]*id=["']titreOeuvre["'][^>]*>(.*?)</h1>"#).unwrap();
     let fallback_title_re = Regex::new(r#"<h1[^>]*>(.*?)</h1>"#).unwrap();

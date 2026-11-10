@@ -7,13 +7,12 @@ pub fn execute_search(query: &str) -> Result<Vec<CardItem>, String> {
         urlencode(query)
     );
 
-    let resp = ureq::get(&url)
-        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        .timeout(std::time::Duration::from_secs(10))
-        .call()
-        .map_err(|e| format!("Erreur réseau recherche: {}", e))?;
-
-    let html = resp.into_string().map_err(|e| format!("Erreur lecture réponse: {}", e))?;
+    let html = super::http::fetch_site_text(
+    &url,
+    10,
+    4 * 1024 * 1024,
+    None,
+)?;
 
     Ok(parse_cards_from_container(&html, "list_catalog"))
 }

@@ -10,7 +10,7 @@ default = ["gui"]
 gui = ["dep:tao", "dep:wry"]
 
 [dependencies]
-tiny_http = "0.12"
+tiny_http = { package = "tiny_http_fork", version = "=0.12.17" }
 tao = { version = "0.37", features = ["rwh_06"], optional = true }
 wry = { version = "0.57", optional = true }
 serde = { version = "1.0", features = ["derive"] }
@@ -30,3 +30,6 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+[patch.crates-io]
+tiny_http_fork = { path = "vendor/tiny_http_fork" }

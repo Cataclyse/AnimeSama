@@ -350,24 +350,71 @@ pub fn extract_slugs(cloud: &serde_json::Value, key: &str) -> Vec<String> {
 }
 
 pub fn url_decode(s: &str) -> String {
-    let mut result = String::new();
-    let mut chars = s.chars();
-    while let Some(c) = chars.next() {
-        if c == '%' {
-            let h1 = chars.next();
-            let h2 = chars.next();
-            if let (Some(c1), Some(c2)) = (h1, h2) {
-                let hex_str = format!("{}{}", c1, c2);
-                if let Ok(byte) = u8::from_str_radix(&hex_str, 16) {
-                    result.push(byte as char);
-                    continue;
-                }
-            }
-        } else if c == '+' {
-            result.push(' ');
-        } else {
-            result.push(c);
+    fn hex_value(value: u8) -> Option<u8> {
+        match value {
+            b'0'..=b'9' => Some(value - b'0'),
+            b'a'..=b'f' => Some(value - b'a' + 10),
+            b'A'..=b'F' => Some(value - b'A' + 10),
+            _ => None,
         }
     }
-    result
+
+    let input = s.as_bytes();
+    let mut output = Vec::with_capacity(input.len());
+    let mut index = 0;
+
+    while index < input.len() {
+        match input[index] {
+            b'+' => {
+                output.push(b' ');
+                index += 1;
+            }
+            b'%' if index + 2 < input.len() => {
+                if let (Some(hi), Some(lo)) = (
+                    hex_value(input[index + 1]),
+                    hex_value(input[index + 2]),
+                ) {
+                    output.push((hi << 4) | lo);
+                    index += 3;
+                } else {
+                    output.push(b'%');
+                    index += 1;
+                }
+            }
+            byte => {
+                output.push(byte);
+                index += 1;
+            }
+        }
+    }
+
+    String::from_utf8(output).unwrap_or_else(|_| s.to_owned())
+}
+
+
+#[cfg(test)]
+mod url_decode_utf8_tests {
+    use super::url_decode;
+
+    #[test]
+    fn decodes_utf8_accents() {
+        assert_eq!(url_decode("Pok%C3%A9mon"), "Pokémon");
+        assert_eq!(url_decode("Fran%C3%A7ais"), "Français");
+        assert_eq!(url_decode("D%C3%A9j%C3%A0"), "Déjà");
+    }
+
+    #[test]
+    fn preserves_standard_query_semantics() {
+        assert_eq!(url_decode("Kagura+Bachi"), "Kagura Bachi");
+        assert_eq!(url_decode("Solo%20Leveling"), "Solo Leveling");
+        assert_eq!(url_decode("scan%2Fvf"), "scan/vf");
+        assert_eq!(url_decode("%252F"), "%2F");
+    }
+
+    #[test]
+    fn handles_malformed_sequences_without_dropping_text() {
+        assert_eq!(url_decode("test%ZZ"), "test%ZZ");
+        assert_eq!(url_decode("test%2"), "test%2");
+        assert_eq!(url_decode("test%C3"), "test%C3");
+    }
 }

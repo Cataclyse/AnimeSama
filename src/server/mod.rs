@@ -1,4 +1,5 @@
 pub mod handlers;
+pub mod video_bridge;
 pub mod routes;
 pub mod static_files;
 pub mod translate;
@@ -6,7 +7,7 @@ pub mod translate;
 use crate::catalogue::CatalogData;
 use crate::scraper::Scraper;
 use crate::user::{AuthClient, UserManager};
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
 
@@ -18,6 +19,34 @@ pub struct AppState {
     pub auth: AuthClient,
     pub is_syncing: AtomicBool,
     pub translation_cache: translate::TranslationCache,
+}
+
+
+const MAX_ACTIVE_HTTP_REQUESTS: usize = 32;
+
+struct RequestPermit(Arc<AtomicUsize>);
+
+impl RequestPermit {
+    fn try_acquire(active: &Arc<AtomicUsize>) -> Option<Self> {
+        active
+            .try_update(
+                Ordering::AcqRel,
+                Ordering::Acquire,
+                |count| {
+                    (count < MAX_ACTIVE_HTTP_REQUESTS)
+                        .then_some(count + 1)
+                },
+            )
+            .ok()?;
+
+        Some(Self(Arc::clone(active)))
+    }
+}
+
+impl Drop for RequestPermit {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
+    }
 }
 
 pub fn start_server(port: u16) -> (Arc<AppState>, thread::JoinHandle<()>) {
@@ -50,12 +79,45 @@ pub fn start_server(port: u16) -> (Arc<AppState>, thread::JoinHandle<()>) {
     });
 
     let s = state.clone();
+    let active_requests = Arc::new(AtomicUsize::new(0));
+
     let handle = thread::spawn(move || {
-        for req in server.incoming_requests() {
+        for incoming in server.incoming_requests() {
+            let req = match incoming {
+                Ok(req) => req,
+                Err(error) => {
+                    eprintln!(
+                        "[Serveur] Requête HTTP rejetée: {:?}",
+                        error
+                    );
+                    continue;
+                }
+            };
+            let Some(permit) = RequestPermit::try_acquire(&active_requests)
+            else {
+                let response = tiny_http::Response::from_string(
+                    "Trop de requêtes simultanées",
+                )
+                .with_status_code(tiny_http::StatusCode(503));
+
+                let _ = req.respond(response);
+                continue;
+            };
+
             let st = s.clone();
-            thread::spawn(move || {
-                routes::handle_request(req, st);
-            });
+
+            if let Err(error) = thread::Builder::new()
+                .name("cataclyse-http".to_string())
+                .spawn(move || {
+                    let _permit = permit;
+                    routes::handle_request(req, st);
+                })
+            {
+                eprintln!(
+                    "[Serveur] Création du thread HTTP impossible: {}",
+                    error
+                );
+            }
         }
     });
 
@@ -64,3 +126,44 @@ pub fn start_server(port: u16) -> (Arc<AppState>, thread::JoinHandle<()>) {
 
 #[cfg(test)]
 mod tests;
+
+
+#[cfg(test)]
+mod concurrency_guard_tests {
+    use super::*;
+
+    #[test]
+    fn limits_active_requests_and_releases_slots() {
+        let active = Arc::new(AtomicUsize::new(0));
+        let mut permits = Vec::new();
+
+        for _ in 0..MAX_ACTIVE_HTTP_REQUESTS {
+            permits.push(
+                RequestPermit::try_acquire(&active)
+                    .expect("Place disponible"),
+            );
+        }
+
+        assert_eq!(
+            active.load(Ordering::Acquire),
+            MAX_ACTIVE_HTTP_REQUESTS
+        );
+
+        assert!(RequestPermit::try_acquire(&active).is_none());
+
+        permits.pop();
+
+        assert_eq!(
+            active.load(Ordering::Acquire),
+            MAX_ACTIVE_HTTP_REQUESTS - 1
+        );
+
+        let permit = RequestPermit::try_acquire(&active);
+        assert!(permit.is_some());
+
+        drop(permit);
+        drop(permits);
+
+        assert_eq!(active.load(Ordering::Acquire), 0);
+    }
+}

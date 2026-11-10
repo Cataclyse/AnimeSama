@@ -7,9 +7,111 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
 
+fn allowed_dev_request(
+    req: &tiny_http::Request,
+    method: &str,
+) -> bool {
+    let host = req.headers().get("Host").map(|v| v.as_str())
+        .unwrap_or("");
+
+    if !matches!(host, "127.0.0.1:48621" | "localhost:48621") {
+        return false;
+    }
+
+    if method != "POST" {
+        return true;
+    }
+
+    let origin = req.headers().get("Origin").map(|v| v.as_str());
+
+    let expected = format!("http://{}", host);
+
+    if origin != Some(expected.as_str()) {
+        return false;
+    }
+
+    if let Some(site) = req.headers().get("Sec-Fetch-Site").map(|v| v.as_str())
+    {
+        if site != "same-origin" {
+            return false;
+        }
+    }
+
+    true
+}
+
+
+type PostBodyError = (u16, &'static str);
+
+fn max_post_body_bytes(path: &str) -> usize {
+    match path {
+        "/api/auth/login" | "/api/auth/register" => 16 * 1024,
+        "/api/translate" => 1024 * 1024,
+        _ => 256 * 1024,
+    }
+}
+
+fn read_bounded_post_body<R: std::io::Read>(
+    reader: R,
+    max_bytes: usize,
+) -> Result<String, PostBodyError> {
+    use std::io::Read;
+
+    let mut body = Vec::new();
+
+    reader
+        .take(max_bytes as u64 + 1)
+        .read_to_end(&mut body)
+        .map_err(|_| (400, "Lecture du corps HTTP impossible"))?;
+
+    if body.len() > max_bytes {
+        return Err((413, "Corps HTTP trop volumineux"));
+    }
+
+    String::from_utf8(body)
+        .map_err(|_| (400, "Corps HTTP UTF-8 invalide"))
+}
+
+fn parse_post_json(
+    content: &str,
+) -> Result<serde_json::Value, PostBodyError> {
+    serde_json::from_str(content)
+        .map_err(|_| (400, "Corps JSON invalide"))
+}
+
+macro_rules! read_post_body_or_reply {
+    ($request:ident, $limit:expr $(,)?) => {{
+        match read_bounded_post_body($request.as_reader(), $limit) {
+            Ok(body) => body,
+            Err((status, message)) => {
+                respond_error($request, status, message);
+                return;
+            }
+        }
+    }};
+}
+
+macro_rules! parse_post_json_or_reply {
+    ($request:ident, $content:expr) => {{
+        match parse_post_json($content) {
+            Ok(value) => value,
+            Err((status, message)) => {
+                respond_error($request, status, message);
+                return;
+            }
+        }
+    }};
+}
+
 pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
     let url = req.url().to_string();
     let method = req.method().to_string();
+
+    if !allowed_dev_request(&req, &method) {
+        respond_error(req, 403, "Origine HTTP non autorisée");
+        return;
+    }
+
 
     let (path, query_str) = match url.find('?') {
         Some(idx) => (&url[..idx], &url[idx + 1..]),
@@ -155,12 +257,39 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
             }
         }
 
+        ("GET", "/api/video/resolve") => {
+            match super::video_bridge::resolve(&query_params) {
+                Ok(data) => respond_json(req, &data.to_string()),
+                Err((status, message)) => {
+                    respond_error(req, status, message)
+                }
+            }
+        }
+
+        ("GET", "/api/video/sources") => {
+            match super::video_bridge::sources(&query_params) {
+                Ok(data) => respond_json(req, &data.to_string()),
+                Err((status, message)) => {
+                    respond_error(req, status, message)
+                }
+            }
+        }
+
         ("GET", "/api/episodes") => {
             let slug = query_params.get("slug").cloned().unwrap_or_default();
             let season = query_params.get("season").cloned().unwrap_or_else(|| "saison1/vostfr".to_string());
 
             if slug.is_empty() {
                 respond_error(req, 400, "Paramètre 'slug' manquant");
+                return;
+            }
+
+            if !crate::scraper::valid_episode_request(&slug, &season) {
+                respond_error(
+                    req,
+                    400,
+                    "Slug ou chemin de saison invalide",
+                );
                 return;
             }
 
@@ -180,8 +309,10 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
         }
 
         ("POST", "/api/watchlist/toggle") => {
-            let mut content = String::new();
-            let _ = req.as_reader().read_to_string(&mut content);
+            let content = read_post_body_or_reply!(
+                req,
+                max_post_body_bytes(path),
+            );
             let parsed: Result<serde_json::Value, _> = serde_json::from_str(&content);
             let slug = parsed
                 .ok()
@@ -203,8 +334,10 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
         }
 
         ("POST", "/api/history") => {
-            let mut content = String::new();
-            let _ = req.as_reader().read_to_string(&mut content);
+            let content = read_post_body_or_reply!(
+                req,
+                max_post_body_bytes(path),
+            );
             if let Ok(entry) = serde_json::from_str::<HistoryEntry>(&content) {
                 let data = state.user_mgr.add_history(entry);
                 respond_json(req, &json!(data).to_string());
@@ -221,8 +354,10 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
         }
 
         ("POST", "/api/history/remove") => {
-            let mut content = String::new();
-            let _ = req.as_reader().read_to_string(&mut content);
+            let content = read_post_body_or_reply!(
+                req,
+                max_post_body_bytes(path),
+            );
             let parsed: Result<serde_json::Value, _> = serde_json::from_str(&content);
             if let Ok(val) = parsed {
                 if let Some(slug) = val.get("slug").and_then(|s| s.as_str()) {
@@ -262,9 +397,11 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
         }
 
         ("POST", "/api/auth/login") => {
-            let mut content = String::new();
-            let _ = req.as_reader().read_to_string(&mut content);
-            let parsed: serde_json::Value = serde_json::from_str(&content).unwrap_or_default();
+            let content = read_post_body_or_reply!(
+                req,
+                max_post_body_bytes(path),
+            );
+            let parsed: serde_json::Value = parse_post_json_or_reply!(req, &content);
             let pseudo = parsed.get("pseudo").and_then(|v| v.as_str()).unwrap_or_default();
             let password = parsed.get("password").and_then(|v| v.as_str()).unwrap_or_default();
 
@@ -275,9 +412,11 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
         }
 
         ("POST", "/api/auth/register") => {
-            let mut content = String::new();
-            let _ = req.as_reader().read_to_string(&mut content);
-            let parsed: serde_json::Value = serde_json::from_str(&content).unwrap_or_default();
+            let content = read_post_body_or_reply!(
+                req,
+                max_post_body_bytes(path),
+            );
+            let parsed: serde_json::Value = parse_post_json_or_reply!(req, &content);
             let pseudo = parsed.get("pseudo").and_then(|v| v.as_str()).unwrap_or_default();
             let password = parsed.get("password").and_then(|v| v.as_str()).unwrap_or_default();
 
@@ -356,9 +495,11 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
         }
 
         ("POST", "/api/settings/auto-sync") => {
-            let mut content = String::new();
-            let _ = req.as_reader().read_to_string(&mut content);
-            let parsed: serde_json::Value = serde_json::from_str(&content).unwrap_or_default();
+            let content = read_post_body_or_reply!(
+                req,
+                max_post_body_bytes(path),
+            );
+            let parsed: serde_json::Value = parse_post_json_or_reply!(req, &content);
             let enabled = parsed.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false);
 
             let data = state.user_mgr.set_auto_sync(enabled);
@@ -366,9 +507,11 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
         }
 
         ("POST", "/api/settings/ad-shield") => {
-            let mut content = String::new();
-            let _ = req.as_reader().read_to_string(&mut content);
-            let parsed: serde_json::Value = serde_json::from_str(&content).unwrap_or_default();
+            let content = read_post_body_or_reply!(
+                req,
+                max_post_body_bytes(path),
+            );
+            let parsed: serde_json::Value = parse_post_json_or_reply!(req, &content);
             let enabled = parsed.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true);
 
             let data = state.user_mgr.set_ad_shield(enabled);
@@ -376,9 +519,11 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
         }
 
         ("POST", "/api/settings/auto-update") => {
-            let mut content = String::new();
-            let _ = req.as_reader().read_to_string(&mut content);
-            let parsed: serde_json::Value = serde_json::from_str(&content).unwrap_or_default();
+            let content = read_post_body_or_reply!(
+                req,
+                max_post_body_bytes(path),
+            );
+            let parsed: serde_json::Value = parse_post_json_or_reply!(req, &content);
             let enabled = parsed.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true);
 
             let data = state.user_mgr.set_auto_update(enabled);
@@ -386,9 +531,11 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
         }
 
         ("POST", "/api/settings/discord-rpc") => {
-            let mut content = String::new();
-            let _ = req.as_reader().read_to_string(&mut content);
-            let parsed: serde_json::Value = serde_json::from_str(&content).unwrap_or_default();
+            let content = read_post_body_or_reply!(
+                req,
+                max_post_body_bytes(path),
+            );
+            let parsed: serde_json::Value = parse_post_json_or_reply!(req, &content);
             let enabled = parsed.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true);
 
             let data = state.user_mgr.set_discord_rpc(enabled);
@@ -403,8 +550,10 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
                 respond_json(req, &json!({ "status": "disabled" }).to_string());
                 return;
             }
-            let mut content = String::new();
-            let _ = req.as_reader().read_to_string(&mut content);
+            let content = read_post_body_or_reply!(
+                req,
+                max_post_body_bytes(path),
+            );
             let parsed: Result<crate::discord::PresencePayload, _> = serde_json::from_str(&content);
             match parsed {
                 Ok(payload) => {
@@ -480,9 +629,11 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
         }
 
         ("POST", "/api/translate") => {
-            let mut content = String::new();
-            let _ = req.as_reader().read_to_string(&mut content);
-            let parsed: serde_json::Value = serde_json::from_str(&content).unwrap_or_default();
+            let content = read_post_body_or_reply!(
+                req,
+                max_post_body_bytes(path),
+            );
+            let parsed: serde_json::Value = parse_post_json_or_reply!(req, &content);
             let target = parsed.get("target").and_then(|v| v.as_str()).unwrap_or("fr");
 
             if let Some(arr) = parsed.get("texts").and_then(|v| v.as_array()) {
@@ -504,10 +655,12 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
         }
 
         ("POST", "/api/update/apply") => {
-            match crate::update::apply_update() {
-                Ok(res) => respond_json(req, &json!(res).to_string()),
-                Err(e) => respond_error(req, 500, &e),
-            }
+            // Instance DEV : installation interdite.
+            respond_error(
+                req,
+                403,
+                "Mises a jour desactivees sur Cataclyse DEV",
+            );
         }
 
         ("GET", "/api/update/status") => {
@@ -516,16 +669,64 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
         }
 
         ("POST", "/api/update/open-release") => {
-            let mut content = String::new();
-            let _ = req.as_reader().read_to_string(&mut content);
-            let parsed: serde_json::Value = serde_json::from_str(&content).unwrap_or_default();
-            let url = parsed.get("url").and_then(|v| v.as_str()).unwrap_or("https://github.com/Cataclyse/AnimeSama/releases");
-            let _ = opener::open(url);
-            respond_json(req, &json!({ "opened": true }).to_string());
+            // Instance DEV : ouverture d'URL interdite.
+            respond_error(
+                req,
+                403,
+                "Ouverture externe desactivee sur Cataclyse DEV",
+            );
         }
 
         _ => {
             respond_error(req, 404, "Page non trouvée");
         }
+    }
+}
+
+
+#[cfg(test)]
+mod bounded_post_body_tests {
+    use super::*;
+
+    #[test]
+    fn accepts_body_at_exact_limit() {
+        let data = b"12345678";
+        let parsed = read_bounded_post_body(&data[..], 8).unwrap();
+        assert_eq!(parsed, "12345678");
+    }
+
+    #[test]
+    fn rejects_body_over_limit() {
+        let data = b"123456789";
+        let error = read_bounded_post_body(&data[..], 8).unwrap_err();
+        assert_eq!(error.0, 413);
+    }
+
+    #[test]
+    fn rejects_invalid_utf8() {
+        let data = [0xff, 0xfe];
+        let error = read_bounded_post_body(&data[..], 8).unwrap_err();
+        assert_eq!(error.0, 400);
+    }
+
+    #[test]
+    fn parses_valid_json() {
+        let data = parse_post_json(r#"{"enabled":true}"#).unwrap();
+        assert_eq!(data["enabled"], true);
+    }
+
+    #[test]
+    fn rejects_malformed_json() {
+        for body in ["", "{invalid", "not-json"] {
+            assert_eq!(parse_post_json(body).unwrap_err().0, 400);
+        }
+    }
+
+    #[test]
+    fn uses_route_specific_limits() {
+        assert_eq!(max_post_body_bytes("/api/auth/login"), 16384);
+        assert_eq!(max_post_body_bytes("/api/auth/register"), 16384);
+        assert_eq!(max_post_body_bytes("/api/history"), 262144);
+        assert_eq!(max_post_body_bytes("/api/translate"), 1048576);
     }
 }

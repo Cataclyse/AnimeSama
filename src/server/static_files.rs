@@ -12,7 +12,39 @@ pub fn serve_image(req: tiny_http::Request, slug: &str) {
     let _ = req.respond(resp);
 }
 
+
+fn valid_scan_number(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 10
+        && value.bytes().all(|b| b.is_ascii_digit())
+        && matches!(
+            value.parse::<u32>(),
+            Ok(number) if (1..=1_000_000).contains(&number)
+        )
+}
+
+fn valid_scan_request(
+    oeuvre: &str,
+    chapter: &str,
+    page: &str,
+) -> bool {
+    !oeuvre.trim().is_empty()
+        && oeuvre.len() <= 512
+        && !oeuvre.chars().any(char::is_control)
+        && !matches!(oeuvre.trim(), "." | "..")
+        && valid_scan_number(chapter)
+        && valid_scan_number(page)
+}
+
 pub fn serve_scan_image(req: tiny_http::Request, oeuvre: &str, chapter: &str, page: &str) {
+
+    if !valid_scan_request(oeuvre, chapter, page) {
+        let _ = req.respond(
+            Response::empty(StatusCode(400))
+        );
+        return;
+    }
+
     let clean_page = if page.ends_with(".jpg") {
         page.to_string()
     } else {
@@ -29,7 +61,18 @@ pub fn serve_scan_image(req: tiny_http::Request, oeuvre: &str, chapter: &str, pa
         }
     }
     let url = format!("https://anime-sama.to/s2/scans/{}/{}/{}", encoded_oeuvre, chapter, clean_page);
-    let resp = ureq::get(&url)
+    // Ne jamais suivre une redirection vers un autre serveur.
+    let agent = ureq::AgentBuilder::new()
+        .redirects(0)
+        .https_only(true)
+        .try_proxy_from_env(false)
+        .resolver(
+            crate::proxy::fetcher::resolve_public_addresses
+        )
+        .timeout(std::time::Duration::from_secs(10))
+        .build();
+
+    let resp = agent.get(&url)
         .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         .set("Referer", "https://anime-sama.to/")
         .timeout(std::time::Duration::from_secs(10))
@@ -38,7 +81,19 @@ pub fn serve_scan_image(req: tiny_http::Request, oeuvre: &str, chapter: &str, pa
     match resp {
         Ok(r) => {
             let mut bytes = Vec::new();
-            if r.into_reader().read_to_end(&mut bytes).is_ok() {
+            // Limiter la mémoire consommée par une image distante.
+            const MAX_SCAN_IMAGE_BYTES: usize = 16 * 1024 * 1024;
+
+            let valid_status = r.status() == 200;
+
+            let valid_body = valid_status
+                && r.into_reader()
+                    .take((MAX_SCAN_IMAGE_BYTES + 1) as u64)
+                    .read_to_end(&mut bytes)
+                    .is_ok()
+                && bytes.len() <= MAX_SCAN_IMAGE_BYTES;
+
+            if valid_body {
                 let tiny_resp = Response::from_data(bytes)
                     .with_header(Header::from_bytes(&b"Content-Type"[..], &b"image/jpeg"[..]).unwrap())
                     .with_header(Header::from_bytes(&b"Cache-Control"[..], &b"public, max-age=86400"[..]).unwrap())
@@ -86,8 +141,7 @@ pub fn respond_js(req: tiny_http::Request, content: &str) {
 
 pub fn respond_json(req: tiny_http::Request, content: &str) {
     let resp = Response::from_string(content)
-        .with_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json; charset=utf-8"[..]).unwrap())
-        .with_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+        .with_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json; charset=utf-8"[..]).unwrap());
     let _ = req.respond(resp);
 }
 
@@ -95,8 +149,7 @@ pub fn respond_error(req: tiny_http::Request, status: u16, msg: &str) {
     let body = serde_json::json!({ "error": msg }).to_string();
     let resp = Response::from_string(body)
         .with_status_code(StatusCode(status))
-        .with_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json; charset=utf-8"[..]).unwrap())
-        .with_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+        .with_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json; charset=utf-8"[..]).unwrap());
     let _ = req.respond(resp);
 }
 
@@ -213,4 +266,47 @@ pub fn serve_static(req: tiny_http::Request, path: &str) -> bool {
         }
     }
     false
+}
+
+
+#[cfg(test)]
+mod scan_request_validation_tests {
+    use super::valid_scan_request;
+
+    #[test]
+    fn rejects_special_oeuvre_segments() {
+        for oeuvre in [".", "..", " . ", " .. ", "   "] {
+            assert!(
+                !valid_scan_request(oeuvre, "1", "1"),
+                "Nom d'œuvre accepté à tort: {oeuvre:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn accepts_valid_scan_parameters() {
+        assert!(valid_scan_request("Kagura Bachi", "1", "1"));
+        assert!(valid_scan_request("Pokémon", "2", "15"));
+        assert!(valid_scan_request("Solo Leveling", "3", "100"));
+    }
+
+    #[test]
+    fn rejects_invalid_scan_parameters() {
+        for (oeuvre, chapter, page) in [
+            ("", "1", "1"),
+            ("Test", "0", "1"),
+            ("Test", "2.5", "1"),
+            ("Test", "../1", "1"),
+            ("Test", "1/2", "1"),
+            ("Test", "1", "../2"),
+            ("Test", "1", "2?x=1"),
+            ("Test", "1", "0"),
+            ("Test", "9999999999", "1"),
+        ] {
+            assert!(
+                !valid_scan_request(oeuvre, chapter, page),
+                "Paramètres acceptés à tort: {oeuvre:?} {chapter:?} {page:?}"
+            );
+        }
+    }
 }

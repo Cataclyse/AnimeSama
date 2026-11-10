@@ -41,9 +41,37 @@ pub fn userdata_path() -> PathBuf {
 
 pub fn session_path() -> PathBuf {
     let target = app_data_dir().join("session.json");
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        if let Some(parent) = target.parent() {
+            if let Err(e) = fs::set_permissions(
+                parent,
+                fs::Permissions::from_mode(0o700),
+            ) {
+                eprintln!("[auth] Protection du dossier impossible: {}", e);
+            }
+        }
+    }
+
     if !target.exists() && Path::new("session.json").exists() {
         let _ = fs::copy("session.json", &target);
     }
+
+    #[cfg(unix)]
+    if target.exists() {
+        use std::os::unix::fs::PermissionsExt;
+
+        if let Err(e) = fs::set_permissions(
+            &target,
+            fs::Permissions::from_mode(0o600),
+        ) {
+            eprintln!("[auth] Protection du fichier impossible: {}", e);
+        }
+    }
+
     target
 }
 
