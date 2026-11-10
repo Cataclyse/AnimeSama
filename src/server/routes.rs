@@ -1,7 +1,7 @@
 use super::handlers::*;
 use super::static_files::*;
 use super::AppState;
-use crate::user::HistoryEntry;
+use crate::user::{HistoryEntry, PlaybackPosition};
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -331,6 +331,69 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
                 "userdata": data
             });
             respond_json(req, &resp.to_string());
+        }
+
+        ("GET", "/api/playback/position") => {
+            let slug = query_params.get("slug");
+            let season = query_params.get("season");
+            let episode = query_params
+                .get("episode")
+                .and_then(|v| v.parse::<usize>().ok());
+
+            match (slug, season, episode) {
+                (Some(slug), Some(season), Some(episode))
+                    if !slug.is_empty()
+                        && !season.is_empty()
+                        && episode > 0 =>
+                {
+                    let position = state.user_mgr
+                        .get_playback_position(slug, season, episode);
+
+                    respond_json(
+                        req,
+                        &json!({"position": position}).to_string()
+                    );
+                }
+                _ => respond_error(
+                    req, 400, "Paramètres de progression invalides"
+                ),
+            }
+        }
+
+        ("POST", "/api/playback/position") => {
+            let content = read_post_body_or_reply!(
+                req,
+                max_post_body_bytes(path),
+            );
+
+            match serde_json::from_str::<PlaybackPosition>(&content) {
+                Ok(position)
+                    if !position.slug.is_empty()
+                        && position.slug.len() <= 200
+                        && !position.season.is_empty()
+                        && position.season.len() <= 100
+                        && position.episode > 0
+                        && position.episode <= 10000
+                        && position.current_time.is_finite()
+                        && position.duration.is_finite()
+                        && position.current_time >= 0.0
+                        && position.duration >= 0.0
+                        && position.current_time <= 864000.0
+                        && position.duration <= 864000.0
+                        && position.timestamp > 0 =>
+                {
+                    let saved = state.user_mgr
+                        .put_playback_position(position);
+
+                    respond_json(
+                        req,
+                        &json!({"position": saved}).to_string()
+                    );
+                }
+                _ => respond_error(
+                    req, 400, "Position de lecture invalide"
+                ),
+            }
         }
 
         ("POST", "/api/history") => {

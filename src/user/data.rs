@@ -13,10 +13,23 @@ pub struct HistoryEntry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaybackPosition {
+    pub slug: String,
+    pub season: String,
+    pub episode: usize,
+    pub current_time: f64,
+    pub duration: f64,
+    pub timestamp: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserData {
     pub watchlist: Vec<String>,
     pub favorites: Vec<String>,
     pub history: Vec<HistoryEntry>,
+    #[serde(default)]
+    pub playback_positions: Vec<PlaybackPosition>,
     #[serde(default)]
     pub dismissed_continue: Vec<String>,
     #[serde(default)]
@@ -39,6 +52,7 @@ impl Default for UserData {
             watchlist: Vec::new(),
             favorites: Vec::new(),
             history: Vec::new(),
+            playback_positions: Vec::new(),
             dismissed_continue: Vec::new(),
             auto_sync: false,
             ad_shield: true,
@@ -144,6 +158,57 @@ impl UserManager {
         snapshot
     }
 
+    pub fn get_playback_position(
+        &self,
+        slug: &str,
+        season: &str,
+        episode: usize,
+    ) -> Option<PlaybackPosition> {
+        let data = self.data.lock().unwrap();
+        data.playback_positions
+            .iter()
+            .find(|p| {
+                p.slug == slug
+                    && p.season == season
+                    && p.episode == episode
+            })
+            .cloned()
+    }
+
+    pub fn put_playback_position(
+        &self,
+        incoming: PlaybackPosition,
+    ) -> PlaybackPosition {
+        let mut data = self.data.lock().unwrap();
+
+        let saved = if let Some(existing) =
+            data.playback_positions.iter_mut().find(|p| {
+                p.slug == incoming.slug
+                    && p.season == incoming.season
+                    && p.episode == incoming.episode
+            })
+        {
+            if incoming.timestamp >= existing.timestamp {
+                *existing = incoming;
+            }
+            existing.clone()
+        } else {
+            data.playback_positions.push(incoming.clone());
+            incoming
+        };
+
+        if data.playback_positions.len() > 1000 {
+            data.playback_positions
+                .sort_by_key(|p| std::cmp::Reverse(p.timestamp));
+            data.playback_positions.truncate(1000);
+        }
+
+        let snapshot = data.clone();
+        drop(data);
+        self.save(&snapshot);
+        saved
+    }
+
     pub fn add_history(&self, entry: HistoryEntry) -> UserData {
         let mut d = self.data.lock().unwrap();
         d.dismissed_continue.retain(|s| s != &entry.slug);
@@ -177,5 +242,24 @@ impl UserManager {
                 let _ = fs::write("userdata.json", &json);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod playback_position_tests {
+    use super::*;
+
+    #[test]
+    fn legacy_data_without_positions_is_supported() {
+        let mut legacy =
+            serde_json::to_value(UserData::default()).unwrap();
+        legacy.as_object_mut()
+            .unwrap()
+            .remove("playback_positions");
+
+        let parsed: UserData =
+            serde_json::from_value(legacy).unwrap();
+
+        assert!(parsed.playback_positions.is_empty());
     }
 }

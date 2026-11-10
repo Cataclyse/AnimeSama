@@ -8,3 +8,5 @@ pub use auth::AuthClient;
 pub use data::{HistoryEntry, UserData, UserManager};
 #[allow(unused_imports)]
 pub use paths::*;
+
+pub use self::data::PlaybackPosition;
