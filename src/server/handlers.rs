@@ -98,14 +98,14 @@ pub fn run_auto_sync(state: &Arc<AppState>) -> Result<serde_json::Value, String>
 
     if needs_cloud_push {
         let history_payload = build_history_payload(&state.catalog, local_by_slug.values());
-        if let Err(e) = state.auth.push_cloud_data("sync-history.php", json!({ "history": history_payload })) {
-            eprintln!("[AutoSync] Erreur sync-history: {}", e);
-        }
+        state.auth
+            .push_cloud_data("sync-history.php", json!({ "history": history_payload }))
+            .map_err(|e| format!("Échec sync-history : {e}"))?;
 
         let progress_payload = build_progress_payload(local_by_slug.values());
-        if let Err(e) = state.auth.push_cloud_data("sync-progress.php", json!({ "progress": progress_payload })) {
-            eprintln!("[AutoSync] Erreur sync-progress: {}", e);
-        }
+        state.auth
+            .push_cloud_data("sync-progress.php", json!({ "progress": progress_payload }))
+            .map_err(|e| format!("Échec sync-progress : {e}"))?;
 
         updated_cloud = local_by_slug.len() as u32;
     }
