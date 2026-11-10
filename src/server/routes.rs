@@ -10,6 +10,42 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 
+
+fn playback_error_status(
+    error: &crate::user::accounts::PositionStoreError,
+) -> u16 {
+    use crate::user::accounts::PositionStoreError;
+
+    match error {
+        PositionStoreError::Unauthorized => 401,
+        PositionStoreError::Invalid => 400,
+        PositionStoreError::Conflict => 409,
+        PositionStoreError::Storage(_) => 500,
+    }
+}
+
+fn respond_playback_error(
+    req: tiny_http::Request,
+    error: crate::user::accounts::PositionStoreError,
+) {
+    use crate::user::accounts::PositionStoreError;
+
+    let status = playback_error_status(&error);
+
+    if let PositionStoreError::Storage(ref detail) = error {
+        eprintln!("[Playback] Erreur de stockage : {}", detail);
+    }
+
+    let message = match status {
+        401 => "Session Cataclyse requise",
+        400 => "Position de lecture invalide",
+        409 => "Position modifiée par un autre appareil",
+        _ => "Stockage des progressions indisponible",
+    };
+
+    respond_error(req, status, message);
+}
+
 const LOCAL_COOKIE: &str = "cataclyse_session";
 const LOCAL_COOKIE_AGE: u64 = 30 * 24 * 60 * 60;
 
@@ -481,7 +517,18 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
             respond_json(req, &resp.to_string());
         }
 
+
         ("GET", "/api/playback/position") => {
+            let token = match request_local_token(&req) {
+                Some(token) => token.to_owned(),
+                None => {
+                    respond_error(
+                        req, 401, "Session Cataclyse requise"
+                    );
+                    return;
+                }
+            };
+
             let slug = query_params.get("slug");
             let season = query_params.get("season");
             let episode = query_params
@@ -489,18 +536,21 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
                 .and_then(|v| v.parse::<usize>().ok());
 
             match (slug, season, episode) {
-                (Some(slug), Some(season), Some(episode))
-                    if !slug.is_empty()
-                        && !season.is_empty()
-                        && episode > 0 =>
-                {
-                    let position = state.user_mgr
-                        .get_playback_position(slug, season, episode);
-
-                    respond_json(
-                        req,
-                        &json!({"position": position}).to_string()
-                    );
+                (Some(slug), Some(season), Some(episode)) => {
+                    match state.accounts.position_for_session(
+                        &token,
+                        slug,
+                        season,
+                        episode,
+                    ) {
+                        Ok(position) => respond_json(
+                            req,
+                            &json!({"position": position}).to_string(),
+                        ),
+                        Err(error) => {
+                            respond_playback_error(req, error)
+                        }
+                    }
                 }
                 _ => respond_error(
                     req, 400, "Paramètres de progression invalides"
@@ -509,44 +559,43 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
         }
 
         ("POST", "/api/playback/position") => {
+            let token = match request_local_token(&req) {
+                Some(token) => token.to_owned(),
+                None => {
+                    respond_error(
+                        req, 401, "Session Cataclyse requise"
+                    );
+                    return;
+                }
+            };
+
             let content = read_post_body_or_reply!(
                 req,
                 max_post_body_bytes(path),
             );
 
-            match serde_json::from_str::<PlaybackPosition>(&content) {
-                Ok(position)
-                    if !position.slug.is_empty()
-                        && position.slug.len() <= 200
-                        && !position.season.is_empty()
-                        && position.season.len() <= 100
-                        && position.episode > 0
-                        && position.episode <= 10000
-                        && position.current_time.is_finite()
-                        && position.duration.is_finite()
-                        && position.current_time >= 0.0
-                        && position.duration >= 0.0
-                        && position.current_time <= 864000.0
-                        && position.duration <= 864000.0
-                        && position.timestamp > 0 =>
-                {
-                    match state.user_mgr
-                        .put_playback_position(position)
-                    {
-                        Ok(saved) => respond_json(
-                            req,
-                            &json!({"position": saved}).to_string(),
-                        ),
-                        Err(()) => respond_error(
-                            req,
-                            409,
-                            "Position modifiée par un autre appareil",
-                        ),
+            let position =
+                match serde_json::from_str::<PlaybackPosition>(&content) {
+                    Ok(position) => position,
+                    Err(_) => {
+                        respond_error(
+                            req, 400, "Position de lecture invalide"
+                        );
+                        return;
                     }
-                }
-                _ => respond_error(
-                    req, 400, "Position de lecture invalide"
+                };
+
+            match state.accounts.save_position_for_session(
+                &token,
+                position,
+            ) {
+                Ok(saved) => respond_json(
+                    req,
+                    &json!({"position": saved}).to_string(),
                 ),
+                Err(error) => {
+                    respond_playback_error(req, error)
+                }
             }
         }
 
@@ -1142,5 +1191,34 @@ mod local_auth_route_tests {
 
         assert!(budget.allow("alice", true));
         assert_eq!(budget.signups, 1);
+    }
+}
+
+
+#[cfg(test)]
+mod account_playback_route_tests {
+    use super::*;
+    use crate::user::accounts::PositionStoreError;
+
+    #[test]
+    fn maps_account_position_errors_to_http_statuses() {
+        assert_eq!(
+            playback_error_status(&PositionStoreError::Unauthorized),
+            401
+        );
+        assert_eq!(
+            playback_error_status(&PositionStoreError::Invalid),
+            400
+        );
+        assert_eq!(
+            playback_error_status(&PositionStoreError::Conflict),
+            409
+        );
+        assert_eq!(
+            playback_error_status(
+                &PositionStoreError::Storage("test".into())
+            ),
+            500
+        );
     }
 }
