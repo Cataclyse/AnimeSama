@@ -37,6 +37,375 @@ let scanState = {
     encodedOeuvre: ''
 };
 
+
+// Lecteur HLS natif — pilote limité au serveur de développement.
+let nativeHlsVideo = null;
+let nativeHlsForceIframe = false;
+let nativeHlsGeneration = 0;
+let nativeHlsLastSave = 0;
+
+function saveNativeHlsProgress(force = false) {
+    const v = nativeHlsVideo;
+    if (!v || !Number.isFinite(v.currentTime) || v.currentTime < 1) return;
+    if (!State.currentEpisodes || !Number.isFinite(v.duration)) return;
+
+    const now = Date.now();
+    if (!force && now - nativeHlsLastSave < 10000) return;
+
+    nativeHlsLastSave = now;
+
+    recordEpisodeProgress(
+        State.currentEpisodes.slug,
+        State.currentEpIndex + 1,
+        v.currentTime,
+        v.duration
+    );
+}
+
+function stopNativeHls(save = true) {
+    const v = nativeHlsVideo;
+    if (!v) return;
+
+    if (save) saveNativeHlsProgress(true);
+
+    nativeHlsVideo = null;
+    v.pause();
+    v.removeAttribute('src');
+    v.load();
+    v.remove();
+}
+
+async function launchNativeHls(options) {
+    const { generation, episode, resumeSeconds, fallback, title, season, version, retryAttempt = 0 } = options;
+
+    const sourceMode =
+        options.sourceMode === 'all' ? 'all' : 'primary';
+
+    const sourceIdentity = source =>
+        String(source?.provider || source?.host || '').toLowerCase();
+
+    const triedProviders = Array.isArray(options.triedProviders)
+        ? options.triedProviders : [];
+
+    const isCurrent = () =>
+        generation === nativeHlsGeneration &&
+        document.getElementById('playerModal')?.classList.contains('open');
+
+    let multiEnabled = false;
+    try {
+        multiEnabled = location.port === '48621' &&
+            localStorage.getItem('as_multi_sources_dev') === '1';
+    } catch (_) {}
+
+    try {
+        const query = new URLSearchParams({
+            title,
+            season,
+            version,
+            episode: String(episode)
+        });
+
+        let media = null;
+
+        if (multiEnabled) {
+            if (!Array.isArray(options.nativeSources)) {
+                try {
+                    const response = await fetch(
+                        '/api/video/sources?' + query +
+                            '&mode=' + sourceMode,
+                        { cache: 'no-store' }
+                    );
+
+                    if (response.ok) {
+                        const data = await response.json();
+
+                        options.nativeSources = Array.isArray(data.sources)
+                            ? data.sources.filter(source =>
+                                source &&
+                                ['hls', 'mp4'].includes(source.type) &&
+                                ['verified', 'uncertain'].includes(source.health) &&
+                                typeof source.url === 'string' &&
+                                (
+                                    sourceMode !== 'all' ||
+                                    !triedProviders.includes(sourceIdentity(source))
+                                )
+                            )
+                            : [];
+
+                        console.info(
+                            '[Native HLS] Sources directes disponibles:',
+                            options.nativeSources.length
+                        );
+                    } else {
+                        console.warn(
+                            '[Native HLS] Sources HTTP',
+                            response.status
+                        );
+                    }
+                } catch (error) {
+                    console.warn(
+                        '[Native HLS] Sources indisponibles:',
+                        error.name
+                    );
+                }
+            }
+
+            let index = options.nativeSourceIndex || 0;
+
+            while (
+                sourceMode === 'all' &&
+                options.nativeSources?.[index] &&
+                triedProviders.includes(
+                    sourceIdentity(options.nativeSources[index])
+                )
+            ) {
+                index++;
+            }
+
+            options.nativeSourceIndex = index;
+            media = options.nativeSources?.[index] || null;
+        }
+
+        if (!media && multiEnabled && sourceMode === 'all') {
+            console.info('[Native HLS] Aucune alternative directe distincte');
+            throw Error('Aucune source alternative');
+        }
+
+        if (!media) {
+            const response = await fetch('/api/video/resolve?' + query);
+
+            if (!response.ok) {
+                throw Error('Résolution HTTP ' + response.status);
+            }
+
+            media = await response.json();
+        }
+
+        if (!isCurrent()) return;
+
+        if (multiEnabled) {
+            const identity = sourceIdentity(media);
+            if (identity && !triedProviders.includes(identity)) {
+                options.triedProviders = [...triedProviders, identity];
+            }
+        }
+
+        if (!['hls', 'mp4', 'webm'].includes(media.type)) {
+            throw Error('Aucune source vidéo directe compatible');
+        }
+
+        if (
+            media.type === 'hls' &&
+            !document.createElement('video')
+                .canPlayType('application/vnd.apple.mpegurl')
+        ) {
+            throw Error('HLS natif indisponible');
+        }
+
+        const remote = new URL(media.url);
+
+        if (
+            remote.protocol !== 'https:' ||
+            remote.username ||
+            remote.password ||
+            remote.port
+        ) {
+            throw Error('Adresse vidéo invalide');
+        }
+
+        const viewport = document.getElementById('netflixVideoViewport');
+        if (!viewport) throw Error('Viewport introuvable');
+
+        const video = document.createElement('video');
+        video.id = 'cataclyseNativeVideo';
+        video.playsInline = true;
+        video.preload = 'metadata';
+        video.volume = playerState.volume;
+        video.muted = playerState.muted;
+        video.playbackRate = playerState.playbackRate || 1;
+
+        video.style.cssText = [
+            'position:absolute',
+            'inset:0',
+            'width:100%',
+            'height:100%',
+            'object-fit:contain',
+            'background:black',
+            'pointer-events:none'
+        ].join(';');
+
+        video.addEventListener('loadedmetadata', () => {
+            if (nativeHlsVideo !== video) return;
+
+            if (resumeSeconds > 5 && Number.isFinite(video.duration)) {
+                video.currentTime = Math.min(
+                    resumeSeconds,
+                    Math.max(0, video.duration - 1)
+                );
+            }
+
+            syncPlayerMediaMetadata();
+        });
+
+        video.addEventListener('timeupdate', () => {
+            if (nativeHlsVideo !== video) return;
+            updateFromVideoElement(video);
+            saveNativeHlsProgress();
+        });
+
+        for (const event of ['playing', 'pause', 'seeked']) {
+            video.addEventListener(event, () => {
+                if (nativeHlsVideo === video) {
+                    updateFromVideoElement(video);
+                }
+            });
+        }
+
+        video.addEventListener('ended', () => {
+            if (nativeHlsVideo !== video) return;
+            saveNativeHlsProgress(true);
+            changeEpisode(1);
+        });
+
+        video.addEventListener('error', () => {
+            if (nativeHlsVideo !== video || !isCurrent()) return;
+
+            const position = (
+                Number.isFinite(video.currentTime) &&
+                video.currentTime > 0
+            ) ? video.currentTime : (
+                Number.isFinite(resumeSeconds) ? resumeSeconds : 0
+            );
+
+            saveNativeHlsProgress(true);
+            stopNativeHls(false);
+
+            if (
+                multiEnabled &&
+                sourceMode === 'primary' &&
+                retryAttempt === 0
+            ) {
+                console.warn('[Native HLS] Recherche des sources alternatives');
+
+                launchNativeHls({
+                    ...options,
+                    sourceMode: 'all',
+                    nativeSources: null,
+                    nativeSourceIndex: 0,
+                    resumeSeconds: position
+                });
+                return;
+            }
+
+            const nextIndex = (options.nativeSourceIndex || 0) + 1;
+
+            if (
+                multiEnabled &&
+                Array.isArray(options.nativeSources) &&
+                nextIndex < options.nativeSources.length
+            ) {
+                console.warn(
+                    '[Native HLS] Basculement source',
+                    nextIndex + 1,
+                    '/',
+                    options.nativeSources.length
+                );
+
+                launchNativeHls({
+                    ...options,
+                    nativeSourceIndex: nextIndex,
+                    resumeSeconds: position
+                });
+                return;
+            }
+
+            if (retryAttempt < 1) {
+                console.warn('[Native HLS] Erreur média, nouvelle résolution');
+
+                launchNativeHls({
+                    ...options,
+                    sourceMode: 'primary',
+                    nativeSources: null,
+                    nativeSourceIndex: 0,
+                    resumeSeconds: position,
+                    retryAttempt: retryAttempt + 1
+                });
+                return;
+            }
+
+            console.warn('[Native HLS] Nouvelle tentative échouée, repli iframe');
+            fallback(position);
+        });
+
+        nativeHlsVideo = video;
+        nativeHlsLastSave = 0;
+
+        viewport.prepend(video);
+        video.src = toProxyUrl(media.url);
+        video.load();
+
+        startPlayerPolling();
+        syncPlayerMediaMetadata();
+
+        video.play().catch(error => {
+            if (!isCurrent() || nativeHlsVideo !== video) return;
+            if (error.name === 'NotAllowedError') {
+                console.info('[Native HLS] Cliquer sur Lecture');
+            } else {
+                console.warn('[Native HLS] Lecture :', error.name);
+            }
+        });
+
+    } catch (error) {
+        if (!isCurrent()) return;
+        console.warn('[Native HLS] Incident de lecture :', error.name);
+        stopNativeHls();
+
+        if (
+            multiEnabled &&
+            sourceMode === 'primary' &&
+            retryAttempt === 0
+        ) {
+            console.warn('[Native HLS] Recherche des sources alternatives');
+
+            launchNativeHls({
+                ...options,
+                sourceMode: 'all',
+                nativeSources: null,
+                nativeSourceIndex: 0
+            });
+            return;
+        }
+
+        const nextIndex = (options.nativeSourceIndex || 0) + 1;
+
+        if (
+            multiEnabled &&
+            Array.isArray(options.nativeSources) &&
+            nextIndex < options.nativeSources.length
+        ) {
+            launchNativeHls({
+                ...options,
+                nativeSourceIndex: nextIndex
+            });
+            return;
+        }
+
+        if (multiEnabled && retryAttempt < 1) {
+            launchNativeHls({
+                ...options,
+                sourceMode: 'primary',
+                nativeSources: null,
+                nativeSourceIndex: 0,
+                retryAttempt: retryAttempt + 1
+            });
+            return;
+        }
+
+        fallback(resumeSeconds);
+    }
+}
+
 function isScanSeason(season) {
     if (!season && State.currentEpisodes && State.currentEpisodes.season) {
         season = State.currentEpisodes.season;
@@ -138,6 +507,7 @@ function formatPlayerTime(seconds) {
 }
 
 function getIframeVideo() {
+    if (nativeHlsVideo?.isConnected) return nativeHlsVideo;
     try {
         const frame = document.getElementById('videoIframe');
         if (!frame) return null;
@@ -419,6 +789,8 @@ function nextScanChapter() {
 }
 
 async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) {
+    const nativeGeneration = ++nativeHlsGeneration;
+    stopNativeHls();
     if (typeof unDismissContinue === 'function') {
         unDismissContinue(slug);
     }
@@ -564,28 +936,66 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
         proxyUrl += `${sep}${qParams.join('&')}`;
 
         const iframe = document.getElementById('videoIframe');
-        if (iframe) {
-            iframe.onload = () => {
-                syncPlayerMediaMetadata();
-                startPlayerPolling();
-                sendFrameMessage({ type: 'AS_PLAY' });
-                if (resumeSeconds > 5) {
-                    sendFrameMessage({ type: 'AS_SEEK_TO', time: resumeSeconds });
-                }
-                setTimeout(() => {
+
+        const useNativeHls = (() => {
+            try {
+                return location.port === '48621' &&
+                    !nativeHlsForceIframe &&
+                    localStorage.getItem('as_native_hls_dev') === '1' &&
+                    !!animeTitle &&
+                    ['vf', 'vostfr'].includes(currentLang.toLowerCase());
+            } catch (_) {
+                return false;
+            }
+        })();
+
+        const startIframePlayback = (resumeAt = resumeSeconds) => {
+            const targetResume = (
+                Number.isFinite(resumeAt) && resumeAt >= 0
+            ) ? resumeAt : 0;
+
+            const stillCurrent = () =>
+                nativeGeneration === nativeHlsGeneration &&
+                !!document.getElementById('playerModal')
+                    ?.classList.contains('open');
+            if (iframe) iframe.style.display = '';
+            if (iframe) {
+                iframe.onload = () => {
+                    if (!stillCurrent()) return;
+                    syncPlayerMediaMetadata();
+                    startPlayerPolling();
                     sendFrameMessage({ type: 'AS_PLAY' });
-                    if (State.targetResumeTime > 5) {
-                        sendFrameMessage({ type: 'AS_SEEK_TO', time: State.targetResumeTime });
+                    if (targetResume > 5) {
+                        sendFrameMessage({ type: 'AS_SEEK_TO', time: targetResume });
                     }
-                }, 800);
-                setTimeout(() => {
-                    sendFrameMessage({ type: 'AS_PLAY' });
-                    if (State.targetResumeTime > 5) {
-                        sendFrameMessage({ type: 'AS_SEEK_TO', time: State.targetResumeTime });
-                    }
-                }, 2000);
-            };
-            iframe.src = proxyUrl;
+                    setTimeout(() => {
+                        if (!stillCurrent()) return;
+                        sendFrameMessage({ type: 'AS_PLAY' });
+                        if (targetResume > 5) {
+                            sendFrameMessage({ type: 'AS_SEEK_TO', time: targetResume });
+                        }
+                    }, 800);
+                    setTimeout(() => {
+                        if (!stillCurrent()) return;
+                        sendFrameMessage({ type: 'AS_PLAY' });
+                        if (targetResume > 5) {
+                            sendFrameMessage({ type: 'AS_SEEK_TO', time: targetResume });
+                        }
+                    }, 2000);
+                };
+                iframe.src = proxyUrl;
+            }
+
+        };
+
+        if (useNativeHls) {
+            if (iframe) {
+                iframe.onload = null;
+                iframe.src = 'about:blank';
+                iframe.style.display = 'none';
+            }
+        } else {
+            startIframePlayback();
         }
 
         const modal = document.getElementById('playerModal');
@@ -636,6 +1046,18 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
 
         const skipBtn = document.getElementById('netflixSkipIntroBtn');
         if (skipBtn) skipBtn.style.display = 'none';
+
+        if (useNativeHls) {
+            launchNativeHls({
+                generation: nativeGeneration,
+                episode: episodeIndex + 1,
+                resumeSeconds,
+                title: animeTitle,
+                season: currentSeasonBase,
+                version: currentLang.toLowerCase(),
+                fallback: startIframePlayback
+            });
+        }
     } catch (e) {
         console.error('Erreur lecture vidéo:', e);
         showToast('Impossible de lancer le lecteur');
@@ -1483,6 +1905,7 @@ function resetIdleTimer() {
 
 function switchLecteur(newPlayer) {
     if (!State.currentEpisodes || !newPlayer) return;
+    nativeHlsForceIframe = true;
     State.selectedPlayer = newPlayer;
 
     const currentServerEl = document.getElementById('netflixCurrentServer');
@@ -1547,6 +1970,8 @@ function changeEpisode(delta) {
 }
 
 function closePlayerModal() {
+    ++nativeHlsGeneration;
+    stopNativeHls();
     scanState.active = false;
     const scanViewport = document.getElementById('netflixScanViewport');
     const scanBar = document.getElementById('netflixScanBar');
@@ -1740,6 +2165,7 @@ function initNetflixPlayerEvents() {
     document.addEventListener('webkitfullscreenchange', updateFullscreenIcons);
 
     window.addEventListener('message', (ev) => {
+        if (nativeHlsVideo) return;
         if (!ev.data) return;
         const modal = document.getElementById('playerModal');
         if (!modal || !modal.classList.contains('open')) return;
