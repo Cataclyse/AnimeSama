@@ -7,106 +7,216 @@
 
     if (typeof originalSave !== 'function' ||
         typeof originalOpen !== 'function') {
-        console.warn('[PlaybackSync] Fonctions du lecteur indisponibles');
+        console.warn('[PlaybackSync] Lecteur indisponible');
         return;
     }
 
-    const pending = new Map();
-    const timers = new Map();
+    const slots = new Map();
+    let opening = 0;
 
     function normalize(p) {
         if (!p) return null;
 
-        const slug = String(p.slug || '');
-        const season = String(p.season || '');
-        const episode = Number(p.episode);
-        const currentTime = Number(p.currentTime);
-        const duration = Number(p.duration);
-        const timestamp = Number(p.timestamp || Date.now());
+        const value = {
+            slug: String(p.slug || ''),
+            season: String(p.season || ''),
+            episode: Number(p.episode),
+            currentTime: Number(p.currentTime),
+            duration: Number(p.duration),
+            timestamp: Number(p.timestamp || Date.now()),
+            revision: Number(p.revision ?? 0)
+        };
 
-        if (!slug || slug.length > 200 ||
-            !season || season.length > 100 ||
-            !Number.isInteger(episode) ||
-            episode < 1 || episode > 10000 ||
-            !Number.isFinite(currentTime) ||
-            !Number.isFinite(duration) ||
-            currentTime < 0 || duration < 0 ||
-            currentTime > 864000 || duration > 864000 ||
-            !Number.isSafeInteger(timestamp) ||
-            timestamp <= 0) {
+        if (!value.slug || value.slug.length > 200 ||
+            !value.season || value.season.length > 100 ||
+            !Number.isInteger(value.episode) ||
+            value.episode < 1 || value.episode > 10000 ||
+            !Number.isFinite(value.currentTime) ||
+            !Number.isFinite(value.duration) ||
+            value.currentTime < 0 ||
+            value.duration < 0 ||
+            value.currentTime > 864000 ||
+            value.duration > 864000 ||
+            !Number.isSafeInteger(value.timestamp) ||
+            value.timestamp <= 0 ||
+            !Number.isSafeInteger(value.revision) ||
+            value.revision < 0) {
             return null;
         }
 
-        return {
-            slug, season, episode,
-            currentTime, duration, timestamp
-        };
+        return value;
     }
 
-    function positionKey(p) {
+    function keyFor(p) {
         return JSON.stringify([p.slug, p.season, p.episode]);
     }
 
-    function sendPending(key, keepalive = false) {
-        const value = pending.get(key);
-        pending.delete(key);
+    function slotFor(key) {
+        if (!slots.has(key)) {
+            slots.set(key, {
+                revision: null,
+                blocked: false,
+                pending: null,
+                timer: null,
+                busy: false,
+                retryDelay: 3000
+            });
+        }
+        return slots.get(key);
+    }
 
-        if (!value) return;
+    function schedule(key, delay = 3000) {
+        const slot = slotFor(key);
 
-        fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(value),
-            keepalive
-        }).then(response => {
+        if (slot.timer !== null ||
+            slot.busy ||
+            slot.blocked ||
+            slot.revision === null ||
+            !slot.pending) {
+            return;
+        }
+
+        slot.timer = setTimeout(() => {
+            slot.timer = null;
+            void flush(key);
+        }, delay);
+    }
+
+    async function flush(key, keepalive = false) {
+        const slot = slotFor(key);
+
+        if (slot.busy ||
+            slot.blocked ||
+            slot.revision === null ||
+            !slot.pending) {
+            return;
+        }
+
+        const position = slot.pending;
+        slot.pending = null;
+        slot.busy = true;
+
+        try {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    ...position,
+                    revision: slot.revision
+                }),
+                keepalive
+            });
+
+            if (response.status === 409) {
+                slot.blocked = true;
+                slot.pending = null;
+
+                if (slot.timer !== null) {
+                    clearTimeout(slot.timer);
+                    slot.timer = null;
+                }
+
+                console.warn(
+                    '[PlaybackSync] Conflit de révision :',
+                    key
+                );
+
+                if (typeof window.showToast === 'function') {
+                    window.showToast(
+                        'Progression modifiée sur un autre appareil. ' +
+                        'Rouvrez cet épisode pour la récupérer.'
+                    );
+                }
+                return;
+            }
+
             if (!response.ok) {
                 throw new Error('HTTP ' + response.status);
             }
-        }).catch(error => {
-            console.warn('[PlaybackSync] Enregistrement distant échoué:', error);
-        });
+
+            const result = await response.json();
+            const accepted = normalize(result.position);
+
+            if (!accepted ||
+                accepted.revision <= slot.revision) {
+                throw new Error('Révision serveur invalide');
+            }
+
+            slot.revision = accepted.revision;
+            slot.retryDelay = 3000;
+
+        } catch (error) {
+            if (!slot.blocked) {
+                if (!slot.pending ||
+                    position.timestamp > slot.pending.timestamp) {
+                    slot.pending = position;
+                }
+                slot.retryDelay = 15000;
+            }
+
+            console.warn(
+                '[PlaybackSync] Sauvegarde distante différée :',
+                error
+            );
+        } finally {
+            slot.busy = false;
+
+            if (!keepalive) {
+                schedule(key, slot.retryDelay);
+            }
+        }
     }
 
     window.savePlaybackProgress = function(progress) {
         const result = originalSave.apply(this, arguments);
-        const value = normalize(progress);
+        const position = normalize(progress);
 
-        if (!value) return result;
+        if (!position) return result;
 
-        const key = positionKey(value);
-        pending.set(key, value);
+        const key = keyFor(position);
+        const slot = slotFor(key);
 
-        if (!timers.has(key)) {
-            const timer = setTimeout(() => {
-                timers.delete(key);
-                sendPending(key);
-            }, 3000);
-            timers.set(key, timer);
+        if (!slot.blocked) {
+            slot.pending = position;
+            schedule(key);
         }
 
         return result;
     };
 
     window.addEventListener('pagehide', () => {
-        for (const timer of timers.values()) {
-            clearTimeout(timer);
-        }
-        timers.clear();
+        for (const [key, slot] of slots) {
+            if (slot.timer !== null) {
+                clearTimeout(slot.timer);
+                slot.timer = null;
+            }
 
-        for (const key of [...pending.keys()]) {
-            sendPending(key, true);
+            if (slot.pending && !slot.blocked) {
+                void flush(key, true);
+            }
         }
     });
 
     window.openEpisodePlayer = async function(...args) {
+        const sequence = ++opening;
         const [slug, season, index] = args;
         const episode = Number(index) + 1;
 
         if (slug && season &&
-            Number.isInteger(episode) && episode > 0) {
+            Number.isInteger(episode) &&
+            episode > 0 && episode <= 10000) {
+
+            const key = keyFor({
+                slug: String(slug),
+                season: String(season),
+                episode
+            });
 
             const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 1500);
+            const timeout = setTimeout(
+                () => controller.abort(),
+                1500
+            );
 
             try {
                 const params = new URLSearchParams({
@@ -123,37 +233,67 @@
                     }
                 );
 
-                if (response.ok) {
-                    const body = await response.json();
-                    const remote = normalize(body.position);
+                if (sequence !== opening) return;
 
-                    const local = typeof window.getEpisodeProgress === 'function'
-                        ? window.getEpisodeProgress(slug, episode, season)
-                        : null;
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status);
+                }
 
-                    const localTimestamp = Number(local?.timestamp || 0);
+                const body = await response.json();
+                const remote = body.position == null
+                    ? null
+                    : normalize(body.position);
 
-                    if (remote &&
-                        remote.slug === slug &&
-                        remote.season === season &&
-                        remote.episode === episode &&
-                        remote.timestamp > localTimestamp) {
+                if (body.position != null && !remote) {
+                    throw new Error('Position distante invalide');
+                }
 
-                        originalSave(remote);
+                const slot = slotFor(key);
+                const wasBlocked = slot.blocked;
 
-                        // Les appels existants peuvent fournir une position
-                        // locale explicite. La position distante plus récente
-                        // doit alors être utilisée pour cette ouverture.
-                        args[3] = remote.currentTime;
+                slot.revision = remote ? remote.revision : 0;
+                slot.blocked = false;
+                slot.retryDelay = 3000;
+
+                if (wasBlocked) {
+                    slot.pending = null;
+                    if (slot.timer !== null) {
+                        clearTimeout(slot.timer);
+                        slot.timer = null;
                     }
                 }
+
+                const local =
+                    typeof window.getEpisodeProgress === 'function'
+                    ? window.getEpisodeProgress(
+                        slug, episode, season
+                    )
+                    : null;
+
+                const localTimestamp =
+                    Number(local?.timestamp || 0);
+
+                if (remote &&
+                    (wasBlocked ||
+                     remote.timestamp > localTimestamp)) {
+
+                    originalSave(remote);
+                    args[3] = remote.currentTime;
+                }
+
+                schedule(key);
+
             } catch (error) {
-                console.debug('[PlaybackSync] Reprise locale:', error.message);
+                console.debug(
+                    '[PlaybackSync] Reprise locale :',
+                    error.message
+                );
             } finally {
                 clearTimeout(timeout);
             }
         }
 
+        if (sequence !== opening) return;
         return originalOpen.apply(this, args);
     };
 })();

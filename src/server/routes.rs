@@ -382,13 +382,19 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
                         && position.duration <= 864000.0
                         && position.timestamp > 0 =>
                 {
-                    let saved = state.user_mgr
-                        .put_playback_position(position);
-
-                    respond_json(
-                        req,
-                        &json!({"position": saved}).to_string()
-                    );
+                    match state.user_mgr
+                        .put_playback_position(position)
+                    {
+                        Ok(saved) => respond_json(
+                            req,
+                            &json!({"position": saved}).to_string(),
+                        ),
+                        Err(()) => respond_error(
+                            req,
+                            409,
+                            "Position modifiée par un autre appareil",
+                        ),
+                    }
                 }
                 _ => respond_error(
                     req, 400, "Position de lecture invalide"

@@ -21,6 +21,26 @@ pub struct PlaybackPosition {
     pub current_time: f64,
     pub duration: f64,
     pub timestamp: u64,
+    #[serde(default)]
+    pub revision: u64,
+}
+
+fn resolve_position_update(
+    current: Option<&PlaybackPosition>,
+    mut incoming: PlaybackPosition,
+) -> Result<PlaybackPosition, ()> {
+    match current {
+        None if incoming.revision == 0 => {
+            incoming.revision = 1;
+            Ok(incoming)
+        }
+        Some(saved) if saved.revision == incoming.revision => {
+            incoming.revision =
+                saved.revision.checked_add(1).ok_or(())?;
+            Ok(incoming)
+        }
+        _ => Err(()),
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -178,35 +198,37 @@ impl UserManager {
     pub fn put_playback_position(
         &self,
         incoming: PlaybackPosition,
-    ) -> PlaybackPosition {
+    ) -> Result<PlaybackPosition, ()> {
         let mut data = self.data.lock().unwrap();
 
-        let saved = if let Some(existing) =
-            data.playback_positions.iter_mut().find(|p| {
-                p.slug == incoming.slug
-                    && p.season == incoming.season
-                    && p.episode == incoming.episode
-            })
-        {
-            if incoming.timestamp >= existing.timestamp {
-                *existing = incoming;
-            }
-            existing.clone()
-        } else {
-            data.playback_positions.push(incoming.clone());
-            incoming
-        };
+        let index = data.playback_positions.iter().position(|p| {
+            p.slug == incoming.slug
+                && p.season == incoming.season
+                && p.episode == incoming.episode
+        });
+
+        let next = resolve_position_update(
+            index.map(|i| &data.playback_positions[i]),
+            incoming,
+        )?;
+
+        match index {
+            Some(i) => data.playback_positions[i] = next.clone(),
+            None => data.playback_positions.push(next.clone()),
+        }
 
         if data.playback_positions.len() > 1000 {
-            data.playback_positions
-                .sort_by_key(|p| std::cmp::Reverse(p.timestamp));
+            data.playback_positions.sort_by_key(|p| {
+                std::cmp::Reverse(p.timestamp)
+            });
             data.playback_positions.truncate(1000);
         }
 
         let snapshot = data.clone();
         drop(data);
         self.save(&snapshot);
-        saved
+
+        Ok(next)
     }
 
     pub fn add_history(&self, entry: HistoryEntry) -> UserData {
@@ -261,5 +283,64 @@ mod playback_position_tests {
             serde_json::from_value(legacy).unwrap();
 
         assert!(parsed.playback_positions.is_empty());
+    }
+
+    fn sample(revision: u64, time: f64) -> PlaybackPosition {
+        PlaybackPosition {
+            slug: "frieren".into(),
+            season: "saison1/vostfr".into(),
+            episode: 2,
+            current_time: time,
+            duration: 1560.0,
+            timestamp: 123456,
+            revision,
+        }
+    }
+
+    #[test]
+    fn accepts_first_position_with_revision_zero() {
+        let result =
+            resolve_position_update(None, sample(0, 300.0)).unwrap();
+
+        assert_eq!(result.revision, 1);
+        assert_eq!(result.current_time, 300.0);
+    }
+
+    #[test]
+    fn rejects_stale_browser_write() {
+        let saved = sample(5, 600.0);
+        let stale = sample(4, 330.0);
+
+        assert!(resolve_position_update(Some(&saved), stale).is_err());
+        assert_eq!(saved.current_time, 600.0);
+    }
+
+    #[test]
+    fn accepts_intentional_rewind_with_current_revision() {
+        let saved = sample(5, 600.0);
+        let rewind = sample(5, 330.0);
+
+        let result =
+            resolve_position_update(Some(&saved), rewind).unwrap();
+
+        assert_eq!(result.revision, 6);
+        assert_eq!(result.current_time, 330.0);
+    }
+
+    #[test]
+    fn legacy_position_without_revision_is_supported() {
+        let value = serde_json::json!({
+            "slug": "frieren",
+            "season": "saison1/vostfr",
+            "episode": 2,
+            "currentTime": 300.0,
+            "duration": 1560.0,
+            "timestamp": 123456
+        });
+
+        let parsed: PlaybackPosition =
+            serde_json::from_value(value).unwrap();
+
+        assert_eq!(parsed.revision, 0);
     }
 }
