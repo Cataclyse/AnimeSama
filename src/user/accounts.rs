@@ -328,4 +328,59 @@ mod tests {
 
         assert!(db.resolve(&token).unwrap().is_none());
     }
+
+    #[test]
+    fn sqlite_persistence_survives_reopen() {
+        let mut nonce = [0u8; 16];
+        OsRng.fill_bytes(&mut nonce);
+
+        let id = u128::from_le_bytes(nonce);
+
+        let directory = std::env::temp_dir().join(
+            format!("cataclyse-account-test-{}-{}", std::process::id(), id)
+        );
+
+        let path = directory.join("accounts.sqlite3");
+
+        let first = AccountStore::open(&path).unwrap();
+
+        let alice = first.register(
+            "alice", "Alice-persistence-2026"
+        ).unwrap();
+
+        let (_, token) = first.login(
+            "alice", "Alice-persistence-2026"
+        ).unwrap().unwrap();
+
+        drop(first);
+
+        let reopened = AccountStore::open(&path).unwrap();
+
+        assert_eq!(
+            reopened.resolve(&token).unwrap(),
+            Some(alice.clone())
+        );
+
+        let (authenticated, _) = reopened.login(
+            "alice", "Alice-persistence-2026"
+        ).unwrap().unwrap();
+
+        assert_eq!(authenticated, alice);
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            let mode = std::fs::metadata(&path)
+                .unwrap()
+                .permissions()
+                .mode() & 0o777;
+
+            assert_eq!(mode, 0o600);
+        }
+
+        drop(reopened);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
 }

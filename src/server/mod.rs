@@ -7,6 +7,7 @@ pub mod translate;
 use crate::catalogue::CatalogData;
 use crate::scraper::Scraper;
 use crate::user::{AuthClient, UserManager};
+use crate::user::accounts::AccountStore;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -17,6 +18,7 @@ pub struct AppState {
     pub scraper: Scraper,
     pub user_mgr: UserManager,
     pub auth: AuthClient,
+    pub accounts: AccountStore,
     pub is_syncing: AtomicBool,
     pub translation_cache: translate::TranslationCache,
 }
@@ -68,12 +70,38 @@ pub fn start_server(port: u16) -> (Arc<AppState>, thread::JoinHandle<()>) {
     let user_mgr = UserManager::new(userdata_file.to_str().unwrap_or("userdata.json"));
     let auth = AuthClient::new();
 
+    // Stockage local Cataclyse, distinct de la session AnimeSama.
+    let accounts_dir = userdata_file.with_file_name("accounts");
+
+    std::fs::create_dir_all(&accounts_dir)
+        .expect("Impossible de créer le répertoire des comptes");
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        assert!(
+            !accounts_dir.is_symlink(),
+            "Répertoire des comptes non autorisé : lien symbolique"
+        );
+
+        std::fs::set_permissions(
+            &accounts_dir,
+            std::fs::Permissions::from_mode(0o700),
+        ).expect("Impossible de protéger le répertoire des comptes");
+    }
+
+    let accounts = AccountStore::open(
+        &accounts_dir.join("accounts.sqlite3")
+    ).expect("Impossible d'initialiser les comptes Cataclyse");
+
     let state = Arc::new(AppState {
         catalog,
         catalog_error,
         scraper: Scraper::new(),
         user_mgr,
         auth,
+        accounts,
         is_syncing: AtomicBool::new(false),
         translation_cache: translate::new_translation_cache(),
     });
