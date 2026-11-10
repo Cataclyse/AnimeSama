@@ -6,6 +6,153 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
+
+
+const LOCAL_COOKIE: &str = "cataclyse_session";
+const LOCAL_COOKIE_AGE: u64 = 30 * 24 * 60 * 60;
+
+fn parse_local_cookie(header: &str) -> Option<&str> {
+    let mut found = None;
+
+    for item in header.split(';') {
+        let Some((name, value)) = item.trim().split_once('=') else {
+            continue;
+        };
+
+        if name != LOCAL_COOKIE {
+            continue;
+        }
+
+        if found.is_some()
+            || value.len() != 64
+            || !value.bytes().all(|b| b.is_ascii_hexdigit())
+        {
+            return None;
+        }
+
+        found = Some(value);
+    }
+
+    found
+}
+
+fn request_local_token(req: &tiny_http::Request) -> Option<&str> {
+    req.headers()
+        .get("Cookie")
+        .and_then(|h| parse_local_cookie(h.as_str()))
+}
+
+fn local_session_cookie(token: &str) -> String {
+    format!(
+        "{}={}; Path=/api; HttpOnly; SameSite=Strict; Max-Age={}",
+        LOCAL_COOKIE, token, LOCAL_COOKIE_AGE
+    )
+}
+
+fn clear_local_session_cookie() -> String {
+    format!(
+        "{}=; Path=/api; HttpOnly; SameSite=Strict; Max-Age=0",
+        LOCAL_COOKIE
+    )
+}
+
+fn respond_local_json(
+    req: tiny_http::Request,
+    status: u16,
+    body: serde_json::Value,
+    cookie: Option<String>,
+) {
+    let mut response = tiny_http::Response::from_string(
+        body.to_string()
+    ).with_status_code(tiny_http::StatusCode(status));
+
+    response.add_header(
+        tiny_http::Header::from_bytes(
+            &b"Content-Type"[..],
+            &b"application/json; charset=utf-8"[..],
+        ).expect("En-tête Content-Type")
+    );
+
+    response.add_header(
+        tiny_http::Header::from_bytes(
+            &b"Cache-Control"[..],
+            &b"no-store"[..],
+        ).expect("En-tête Cache-Control")
+    );
+
+    response.add_header(
+        tiny_http::Header::from_bytes(
+            &b"X-Content-Type-Options"[..],
+            &b"nosniff"[..],
+        ).expect("En-tête de sécurité")
+    );
+
+    if let Some(value) = cookie {
+        response.add_header(
+            tiny_http::Header::from_bytes(
+                &b"Set-Cookie"[..],
+                value.as_bytes(),
+            ).expect("En-tête Set-Cookie")
+        );
+    }
+
+    let _ = req.respond(response);
+}
+
+#[derive(Default)]
+struct LocalAuthBudget {
+    started: Option<Instant>,
+    signups: u32,
+    logins: u32,
+    by_name: HashMap<String, u32>,
+}
+
+impl LocalAuthBudget {
+    fn allow(&mut self, username: &str, signup: bool) -> bool {
+        let current = Instant::now();
+
+        if self.started
+            .map(|t| current.duration_since(t) >= Duration::from_secs(60))
+            .unwrap_or(true)
+        {
+            *self = Self {
+                started: Some(current),
+                ..Self::default()
+            };
+        }
+
+        let key = username.trim().to_ascii_lowercase();
+        let total = if signup { self.signups } else { self.logins };
+        let global_limit = if signup { 10 } else { 30 };
+        let per_user = *self.by_name.get(&key).unwrap_or(&0);
+
+        if total >= global_limit || per_user >= 5 {
+            return false;
+        }
+
+        if signup {
+            self.signups += 1;
+        } else {
+            self.logins += 1;
+        }
+
+        *self.by_name.entry(key).or_insert(0) += 1;
+        true
+    }
+}
+
+static LOCAL_AUTH_BUDGET:
+    OnceLock<Mutex<LocalAuthBudget>> = OnceLock::new();
+
+fn allow_local_auth(username: &str, signup: bool) -> bool {
+    LOCAL_AUTH_BUDGET
+        .get_or_init(|| Mutex::new(LocalAuthBudget::default()))
+        .lock()
+        .map(|mut budget| budget.allow(username, signup))
+        .unwrap_or(false)
+}
 
 fn allowed_dev_request(
     req: &tiny_http::Request,
@@ -45,7 +192,8 @@ type PostBodyError = (u16, &'static str);
 
 fn max_post_body_bytes(path: &str) -> usize {
     match path {
-        "/api/auth/login" | "/api/auth/register" => 16 * 1024,
+        "/api/auth/login" | "/api/auth/register"
+        | "/api/local-auth/login" | "/api/local-auth/register" => 16 * 1024,
         "/api/translate" => 1024 * 1024,
         _ => 256 * 1024,
     }
@@ -450,6 +598,137 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
             serve_scan_image(req, &oeuvre, &chapter, &page);
         }
 
+
+        ("GET", "/api/local-auth/status") => {
+            let result = match request_local_token(&req) {
+                Some(token) => state.accounts.resolve(token),
+                None => Ok(None),
+            };
+
+            match result {
+                Ok(user) => respond_local_json(
+                    req, 200,
+                    json!({
+                        "logged_in": user.is_some(),
+                        "user": user.map(|u| json!({
+                            "id": u.id,
+                            "username": u.username
+                        }))
+                    }),
+                    None,
+                ),
+                Err(_) => respond_error(
+                    req, 500, "Session locale indisponible"
+                ),
+            }
+        }
+
+        ("POST", "/api/local-auth/register") => {
+            let content = read_post_body_or_reply!(
+                req, max_post_body_bytes(path),
+            );
+            let parsed: serde_json::Value =
+                parse_post_json_or_reply!(req, &content);
+
+            let username = parsed.get("username")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+
+            let password = parsed.get("password")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+
+            if username.len() > 32 || password.len() > 1024 {
+                respond_error(req, 400, "Paramètres invalides");
+                return;
+            }
+
+            if !allow_local_auth(username, true) {
+                respond_error(req, 429, "Trop de tentatives");
+                return;
+            }
+
+            match state.accounts.register(username, password) {
+                Ok(user) => respond_local_json(
+                    req, 201,
+                    json!({
+                        "created": true,
+                        "user": {
+                            "id": user.id,
+                            "username": user.username
+                        }
+                    }),
+                    None,
+                ),
+                Err(_) => respond_error(
+                    req, 400, "Création du compte impossible"
+                ),
+            }
+        }
+
+        ("POST", "/api/local-auth/login") => {
+            let content = read_post_body_or_reply!(
+                req, max_post_body_bytes(path),
+            );
+            let parsed: serde_json::Value =
+                parse_post_json_or_reply!(req, &content);
+
+            let username = parsed.get("username")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+
+            let password = parsed.get("password")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+
+            if username.len() > 32 || password.len() > 1024 {
+                respond_error(req, 401, "Identifiants invalides");
+                return;
+            }
+
+            if !allow_local_auth(username, false) {
+                respond_error(req, 429, "Trop de tentatives");
+                return;
+            }
+
+            match state.accounts.login(username, password) {
+                Ok(Some((user, token))) => respond_local_json(
+                    req, 200,
+                    json!({
+                        "logged_in": true,
+                        "user": {
+                            "id": user.id,
+                            "username": user.username
+                        }
+                    }),
+                    Some(local_session_cookie(&token)),
+                ),
+                Ok(None) => respond_error(
+                    req, 401, "Identifiants invalides"
+                ),
+                Err(_) => respond_error(
+                    req, 500, "Connexion locale indisponible"
+                ),
+            }
+        }
+
+        ("POST", "/api/local-auth/logout") => {
+            if let Some(token) = request_local_token(&req) {
+                if state.accounts.logout(token).is_err() {
+                    respond_error(
+                        req, 500, "Déconnexion impossible"
+                    );
+                    return;
+                }
+            }
+
+            respond_local_json(
+                req, 200,
+                json!({"logged_in": false}),
+                Some(clear_local_session_cookie()),
+            );
+        }
+
         ("GET", "/api/auth/status") => {
             let verify = query_params.get("verify").map(|v| v == "1").unwrap_or(false);
             let logged_in = if verify {
@@ -797,5 +1076,71 @@ mod bounded_post_body_tests {
         assert_eq!(max_post_body_bytes("/api/auth/register"), 16384);
         assert_eq!(max_post_body_bytes("/api/history"), 262144);
         assert_eq!(max_post_body_bytes("/api/translate"), 1048576);
+    }
+}
+
+
+#[cfg(test)]
+mod local_auth_route_tests {
+    use super::*;
+
+    #[test]
+    fn parses_only_exact_session_cookie() {
+        let token = "a".repeat(64);
+        let header = format!(
+            "other=123; {}={}; preference=dark",
+            LOCAL_COOKIE, token
+        );
+
+        assert_eq!(
+            parse_local_cookie(&header),
+            Some(token.as_str())
+        );
+        assert_eq!(
+            parse_local_cookie(&format!(
+                "other_{}={}", LOCAL_COOKIE, token
+            )),
+            None
+        );
+    }
+
+    #[test]
+    fn refuses_ambiguous_or_invalid_cookies() {
+        let token = "b".repeat(64);
+        let duplicate = format!(
+            "{}={}; {}={}",
+            LOCAL_COOKIE, token, LOCAL_COOKIE, token
+        );
+
+        assert!(parse_local_cookie(&duplicate).is_none());
+        assert!(parse_local_cookie(
+            "cataclyse_session=invalid"
+        ).is_none());
+    }
+
+    #[test]
+    fn limits_authentication_attempts() {
+        let mut budget = LocalAuthBudget::default();
+
+        for _ in 0..5 {
+            assert!(budget.allow("alice", false));
+        }
+
+        assert!(!budget.allow("alice", false));
+        assert!(budget.allow("bob", false));
+    }
+
+    #[test]
+    fn resets_rate_limits_after_window() {
+        let mut budget = LocalAuthBudget::default();
+
+        assert!(budget.allow("alice", true));
+
+        budget.started = Some(
+            Instant::now() - Duration::from_secs(61)
+        );
+
+        assert!(budget.allow("alice", true));
+        assert_eq!(budget.signups, 1);
     }
 }
