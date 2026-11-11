@@ -1,0 +1,53 @@
+--- a/api.py
++++ b/api.py
+@@ -113,7 +113,7 @@
+         if not title or not 1 <= episode <= 1000:
+             return jsonify({"error": "Parametres invalides"}), 400
+ 
+-        if version not in ("vf", "vostfr"):
++        if version not in ("vf", "vf2", "vostfr"):
+             return jsonify({"error": "Version invalide"}), 400
+ 
+         try:
+@@ -163,7 +163,7 @@
+                 c.isascii() and (c.isalnum() or c == "-")
+                 for c in season
+             )
+-            or version not in ("vf", "vostfr")
++            or version not in ("vf", "vf2", "vostfr")
+             or not 1 <= episode <= 1000
+         ):
+             return jsonify({"error": "Parametres invalides"}), 400
+--- a/backend.py
++++ b/backend.py
+@@ -633,7 +633,7 @@
+                 ).path.strip("/").split("/")
+ 
+                 if path_parts and path_parts[-1].lower() in (
+-                    "vf", "vostfr"
++                    "vf", "vf2", "vostfr"
+                 ):
+                     path_parts.pop()
+ 
+@@ -703,8 +703,8 @@
+ 
+         if version:
+             matched_copy = dict(matched)
+-            v_norm = "vf" if version.strip().lower() in ["vf", "dub", "french", "fr"] else "vostfr"
+-            base_saison_url = re.sub(r'/(?:vostfr|vf)/?$', '', matched_copy.get("url", ""), flags=re.IGNORECASE)
++            v_norm = "vf2" if version.strip().lower() == "vf2" else ("vf" if version.strip().lower() in ["vf", "dub", "french", "fr"] else "vostfr")
++            base_saison_url = re.sub(r'/(?:vostfr|vf2|vf)/?$', '', matched_copy.get("url", ""), flags=re.IGNORECASE)
+             base_saison_url = re.sub(r'(?<!:)//+', '/', base_saison_url)
+             matched_copy["url"] = f"{base_saison_url}/{v_norm}"
+             return matched_copy
+@@ -725,8 +725,8 @@
+         base_url = reponse.get("base_url", "")
+         url = reponse["url"]
+ 
+-        v_norm = "vf" if version.strip().lower() in ["vf", "dub", "french", "fr"] else "vostfr"
+-        new_url = re.sub(r'/(?:vostfr|vf)/?$', '', url, flags=re.IGNORECASE)
++        v_norm = "vf2" if version.strip().lower() == "vf2" else ("vf" if version.strip().lower() in ["vf", "dub", "french", "fr"] else "vostfr")
++        new_url = re.sub(r'/(?:vostfr|vf2|vf)/?$', '', url, flags=re.IGNORECASE)
+         new_url = re.sub(r'(?<!:)//+', '/', new_url)
+         link = f"{new_url}/{v_norm}"
+ 
