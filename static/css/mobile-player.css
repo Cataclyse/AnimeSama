@@ -1,0 +1,153 @@
+/* Cataclyse 11H.4.3 — Lecteur mobile immersif */
+
+@media screen and (max-width: 640px) {
+
+  #playerModal:has(#netflixScanViewport[style*="display: none"]) {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100dvh;
+    overflow: hidden;
+    background: #000;
+  }
+
+  #playerModal:has(#netflixScanViewport[style*="display: none"])
+  .netflix-player-container {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+  }
+
+  #playerModal:has(#netflixScanViewport[style*="display: none"])
+  .netflix-video-viewport {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    z-index: 1;
+    background: #000;
+  }
+
+  #playerModal .netflix-video-viewport video,
+  #playerModal .netflix-video-viewport iframe {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  #playerModal:has(#netflixScanViewport[style*="display: none"])
+  .netflix-top-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: auto;
+    min-height: 68px;
+    padding: calc(12px + env(safe-area-inset-top, 0px))
+             12px 18px;
+    box-sizing: border-box;
+    display: flex;
+    flex-wrap: nowrap;
+    background: linear-gradient(
+      to bottom, rgba(0,0,0,.94), transparent
+    );
+    z-index: 30;
+  }
+
+  #playerModal .netflix-top-left {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 8px;
+  }
+
+  #playerModal .netflix-title-group {
+    min-width: 0;
+  }
+
+  #playerModal .netflix-player-title {
+    font-size: 17px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #playerModal .netflix-player-ep-title {
+    font-size: 12px;
+  }
+
+  #playerModal .netflix-top-right {
+    flex: 0 0 auto;
+    min-width: 0;
+    gap: 4px;
+  }
+
+  #playerModal:has(#netflixScanViewport[style*="display: none"])
+  .netflix-bottom-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    padding: 28px 10px
+             calc(14px + env(safe-area-inset-bottom, 0px));
+    box-sizing: border-box;
+    background: linear-gradient(
+      to top, rgba(0,0,0,.96), transparent
+    );
+    z-index: 30;
+    gap: 8px;
+  }
+
+  #playerModal .netflix-controls-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  #playerModal .netflix-ctrl-group {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    width: 100%;
+    min-width: 0;
+    gap: 2px;
+  }
+
+  #playerModal .netflix-ctrl-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 38px;
+    min-height: 44px;
+    padding: 5px;
+    box-sizing: border-box;
+    touch-action: manipulation;
+  }
+
+  #playerModal .netflix-ctrl-btn svg {
+    max-width: 23px;
+    max-height: 23px;
+  }
+
+  #playerModal .netflix-time-display {
+    min-width: 0;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  #playerModal .netflix-vol-slider-wrap {
+    display: none;
+  }
+
+  #playerModal .netflix-player-container.idle
+  .netflix-top-bar,
+  #playerModal .netflix-player-container.idle
+  .netflix-bottom-bar {
+    opacity: 0;
+    pointer-events: none;
+  }
+}

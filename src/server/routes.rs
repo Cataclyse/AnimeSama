@@ -441,6 +441,11 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
                 || p == "/app.js"
                 || p.starts_with("/css/")
                 || p.starts_with("/js/")
+                || p == "/manifest.webmanifest"
+                || p == "/sw.js"
+                || p == "/pwa/11i2/icon-192.png"
+                || p == "/pwa/11i2/icon-512.png"
+                || p == "/pwa/11i2/apple-touch-icon.png"
                 || p.starts_with("/lang/") =>
         {
             serve_static(req, p);

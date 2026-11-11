@@ -162,7 +162,14 @@ async function launchNativeHls(options) {
 
     let multiEnabled = false;
     try {
-        multiEnabled = location.port === '48621';
+        multiEnabled = (
+    location.port === '48621' ||
+    (
+        location.protocol === 'https:' &&
+        location.hostname === 'flamingo-thinkpad-l480.tailb1d655.ts.net' &&
+        location.port === '8443'
+    )
+);
     } catch (_) {}
 
     try {
@@ -1264,7 +1271,14 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds, 
 
         const useNativeHls = (() => {
             try {
-                return location.port === '48621' &&
+                return (
+    location.port === '48621' ||
+    (
+        location.protocol === 'https:' &&
+        location.hostname === 'flamingo-thinkpad-l480.tailb1d655.ts.net' &&
+        location.port === '8443'
+    )
+) &&
                     !recovery?.forceIframe &&
                     !nativeHlsForceIframe &&
                     !!animeTitle &&

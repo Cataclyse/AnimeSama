@@ -206,6 +206,70 @@ fn get_embedded_lang(name: &str) -> Option<&'static str> {
 
 pub fn serve_static(req: tiny_http::Request, path: &str) -> bool {
     let clean = path.trim_start_matches('/');
+
+    // 11I.2 - Ressources PWA explicitement autorisees.
+    let pwa_resource = match clean {
+        "manifest.webmanifest" => Some((
+            "static/manifest.webmanifest",
+            "application/manifest+json; charset=utf-8",
+            "no-store"
+        )),
+        "sw.js" => Some((
+            "static/sw.js",
+            "application/javascript; charset=utf-8",
+            "no-store"
+        )),
+        "pwa/11i2/icon-192.png" => Some((
+            "static/pwa/11i2/icon-192.png",
+            "image/png",
+            "public, max-age=3600"
+        )),
+        "pwa/11i2/icon-512.png" => Some((
+            "static/pwa/11i2/icon-512.png",
+            "image/png",
+            "public, max-age=3600"
+        )),
+        "pwa/11i2/apple-touch-icon.png" => Some((
+            "static/pwa/11i2/apple-touch-icon.png",
+            "image/png",
+            "public, max-age=3600"
+        )),
+        _ => None,
+    };
+
+    if let Some((filename, mime, cache)) = pwa_resource {
+        match std::fs::read(filename) {
+            Ok(bytes) => {
+                let response = tiny_http::Response::from_data(bytes)
+                    .with_header(
+                        tiny_http::Header::from_bytes(
+                            "Content-Type", mime
+                        ).unwrap()
+                    )
+                    .with_header(
+                        tiny_http::Header::from_bytes(
+                            "Cache-Control", cache
+                        ).unwrap()
+                    )
+                    .with_header(
+                        tiny_http::Header::from_bytes(
+                            "X-Content-Type-Options", "nosniff"
+                        ).unwrap()
+                    );
+
+                let _ = req.respond(response);
+            }
+            Err(_) => {
+                let _ = req.respond(
+                    tiny_http::Response::empty(
+                        tiny_http::StatusCode(404)
+                    )
+                );
+            }
+        }
+        return true;
+    }
+
     if clean.is_empty() || clean == "index.html" {
         let html = read_static_or("static/index.html", include_str!("../../static/index.html"));
         respond_html(req, &html);
