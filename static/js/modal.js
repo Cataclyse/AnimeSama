@@ -433,13 +433,13 @@ async function loadSeasonEpisodes(slug, seasonPath) {
             return;
         }
 
-        State.selectedPlayer = pickBestPlayer(players, State.selectedPlayer);
+        State.selectedPlayer = pickBestPlayer(players, null);
 
-        DOM.modalPlayerTabs.innerHTML = players.map(p => `
-            <button class="player-tab-btn ${p === State.selectedPlayer ? 'active' : ''}" onclick="selectPlayer('${escapeHtml(p)}')">
-                ${escapeHtml(p)}
-            </button>
-        `).join('');
+        // 11G.2 : aucun choix manuel de diffuseur.
+        // La sélection reste interne au moteur de lecture.
+        DOM.modalPlayerTabs.replaceChildren();
+        DOM.modalPlayerTabs.hidden = true;
+        DOM.modalPlayerTabs.style.display = 'none';
 
         renderEpisodesGrid();
         updateModalPlayButton(State.currentAnime);

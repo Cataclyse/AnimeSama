@@ -17,6 +17,26 @@
     <link rel="stylesheet" href="/css/player.css">
     <link rel="stylesheet" href="/css/settings.css">
     <link rel="stylesheet" href="/css/responsive.css">
+
+    <!-- 11G.1 : sources pilotées automatiquement -->
+    <style id="cataclyse-auto-source-ui">
+        /* 11G.2 : aucun choix manuel de source */
+        .player-tab-btn,
+        #playerModal #netflixServerList,
+        #playerModal .netflix-col-title[data-i18n="player.source_server"] {
+            display: none !important;
+        }
+
+        #playerModal #netflixCurrentServer {
+            display: none !important;
+        }
+
+        #playerModal div:has(
+            > .netflix-col-title[data-i18n="player.source_server"]
+        ) {
+            display: none !important;
+        }
+    </style>
 </head>
 <body>
     <div id="appUpdateOverlay" class="app-update-overlay" style="display: none;">

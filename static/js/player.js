@@ -162,8 +162,7 @@ async function launchNativeHls(options) {
 
     let multiEnabled = false;
     try {
-        multiEnabled = location.port === '48621' &&
-            localStorage.getItem('as_multi_sources_dev') === '1';
+        multiEnabled = location.port === '48621';
     } catch (_) {}
 
     try {
@@ -200,6 +199,24 @@ async function launchNativeHls(options) {
                                 )
                             )
                             : [];
+
+                        // 11G.1 : ne garder que les formats
+                        // lisibles nativement par ce navigateur.
+                        const capabilities = document.createElement('video');
+
+                        options.nativeSources = options.nativeSources
+                            .filter(source => {
+                                if (source.type === 'hls') {
+                                    return !!capabilities.canPlayType(
+                                        'application/vnd.apple.mpegurl'
+                                    );
+                                }
+                                return !!capabilities.canPlayType('video/mp4');
+                            })
+                            .sort((a, b) =>
+                                Number(b.health === 'verified') -
+                                Number(a.health === 'verified')
+                            );
 
                         console.info(
                             '[Native HLS] Sources directes disponibles:',
@@ -935,27 +952,27 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
             return;
         }
 
+        // 11G.1 : choix automatique parmi les lecteurs
+        // proposant réellement l'épisode demandé.
         const players = Object.keys(State.currentEpisodes.players || {});
-        if (!State.selectedPlayer || !players.includes(State.selectedPlayer)) {
-            State.selectedPlayer = pickBestPlayer(players, State.selectedPlayer);
-        }
 
-        let urls = State.currentEpisodes.players[State.selectedPlayer] || [];
         let safeIdx = parseInt(episodeIndex, 10);
         if (isNaN(safeIdx) || safeIdx < 0) safeIdx = 0;
-        if (urls.length > 0 && safeIdx >= urls.length) {
-            safeIdx = urls.length - 1;
-        }
         episodeIndex = safeIdx;
 
-        let videoUrl = (State.currentEpisodes.players[State.selectedPlayer] || [])[episodeIndex];
-        if (!videoUrl) {
-            const fallbackPlayer = players.find(p => (State.currentEpisodes.players[p] || [])[episodeIndex]);
-            if (fallbackPlayer) {
-                State.selectedPlayer = fallbackPlayer;
-                videoUrl = (State.currentEpisodes.players[State.selectedPlayer] || [])[episodeIndex];
-            }
-        }
+        const eligiblePlayers = players.filter(name => {
+            const links = State.currentEpisodes.players[name];
+            return Array.isArray(links) &&
+                typeof links[safeIdx] === 'string' &&
+                links[safeIdx].trim().length > 0;
+        });
+
+        State.selectedPlayer = eligiblePlayers.length
+            ? pickBestPlayer(eligiblePlayers, null)
+            : null;
+
+        const urls = State.currentEpisodes.players[State.selectedPlayer] || [];
+        let videoUrl = urls[episodeIndex];
 
         if (!videoUrl) {
             showToast(t('player.link_unavailable', "Lien d'épisode indisponible"));
@@ -1040,7 +1057,6 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
             try {
                 return location.port === '48621' &&
                     !nativeHlsForceIframe &&
-                    localStorage.getItem('as_native_hls_dev') === '1' &&
                     !!animeTitle &&
                     ['vf', 'vostfr'].includes(currentLang.toLowerCase());
             } catch (_) {
@@ -1800,18 +1816,13 @@ function renderAudioSubModal() {
         }).join('');
     }
 
-    const players = Object.keys(State.currentEpisodes.players || {});
+    // 11G.2 : conserver les langues, masquer les diffuseurs.
     const serverList = document.getElementById('netflixServerList');
     if (serverList) {
-        serverList.innerHTML = players.map(p => {
-            const isActive = p === State.selectedPlayer;
-            return `
-                <button class="netflix-option-row ${isActive ? 'active' : ''}" onclick="selectServerFromModal('${escapeHtml(p)}')">
-                    <span>${escapeHtml(p)}</span>
-                </button>
-            `;
-        }).join('');
+        serverList.replaceChildren();
+        serverList.hidden = true;
     }
+
 }
 
 function selectLanguageFromModal(newLang) {
