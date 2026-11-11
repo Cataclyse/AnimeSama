@@ -1,17 +1,112 @@
-async function refreshAccountStatus(verify) {
+// Les comptes locaux ne sont pas des comptes cloud.
+let localAccountUser = null;
+let localAccountStatusSequence = 0;
+
+function applyAccountStatus(data) {
+    const cache = window.CataclysePlaybackCache;
+    const identity = cache?.snapshot?.();
+    const user = data?.logged_in ? data.user : null;
+
+    const valid = Boolean(
+        user &&
+        Number.isSafeInteger(user.id) &&
+        user.id > 0 &&
+        typeof user.username === 'string' &&
+        user.id === identity?.id
+    );
+
+    localAccountUser = valid
+        ? { id: user.id, username: user.username }
+        : null;
+
+    // Ce champ contrôlait l'ancienne synchronisation cloud.
+    // Ne pas l'activer pour un compte local.
+    State.loggedIn = false;
+
+    if (DOM.accountPseudo) {
+        DOM.accountPseudo.textContent =
+            localAccountUser?.username || '';
+    }
+
+    if (DOM.panelCloudLoggedOut) {
+        DOM.panelCloudLoggedOut.style.display =
+            localAccountUser ? 'none' : 'block';
+    }
+    if (DOM.panelCloudLoggedIn) {
+        DOM.panelCloudLoggedIn.style.display =
+            localAccountUser ? 'block' : 'none';
+    }
+
+    return valid;
+}
+
+async function refreshAccountStatus() {
+    const cache = window.CataclysePlaybackCache;
+
+    if (!cache ||
+        typeof cache.refresh !== 'function' ||
+        typeof cache.snapshot !== 'function') {
+        applyAccountStatus(null);
+        return false;
+    }
+
     try {
-        const res = await fetch(`/api/auth/status${verify ? '?verify=1' : ''}`);
-        const data = await res.json();
-        applyAccountStatus(data);
-    } catch (e) {
-        console.error('Erreur statut compte:', e);
+        await cache.refresh();
+        const sequence = ++localAccountStatusSequence;
+        const initial = cache.snapshot();
+
+        const response = await fetch('/api/local-auth/status', {
+            credentials: 'same-origin',
+            cache: 'no-store'
+        });
+
+        if (!response.ok) {
+            throw new Error('HTTP ' + response.status);
+        }
+
+        const data = await response.json();
+        const verified = await cache.refresh();
+
+        if (
+            sequence !== localAccountStatusSequence ||
+            verified.generation !== initial.generation ||
+            verified.id !== initial.id
+        ) {
+            return false;
+        }
+
+        const responseId = data?.logged_in
+            ? data.user?.id
+            : null;
+
+        if (responseId !== verified.id) {
+            applyAccountStatus(null);
+            return false;
+        }
+
+        return applyAccountStatus(data) ||
+            responseId === null;
+    } catch (error) {
+        console.error(
+            '[LocalAccount] Vérification impossible',
+            error
+        );
+        applyAccountStatus(null);
+        return false;
     }
 }
 
-function applyAccountStatus(data) {
-    State.loggedIn = !!data.logged_in;
-    DOM.accountPseudo.textContent = State.loggedIn ? (data.pseudo || '') : '';
-}
+window.addEventListener(
+    'cataclyse-playback-identity-change',
+    () => {
+        ++localAccountStatusSequence;
+        applyAccountStatus(null);
+
+        if (DOM.accountModal?.classList.contains('open')) {
+            void refreshAccountStatus();
+        }
+    }
+);
 
 function switchSettingsTab(tabName) {
     const tabs = document.querySelectorAll('.netflix-sidebar-item');
@@ -24,31 +119,72 @@ function switchSettingsTab(tabName) {
     });
 }
 
+function disableGlobalSettingsControls() {
+    // GLOBAL_MAINTENANCE_UI_LOCK_11F9
+    for (const id of ['checkUpdateBtn', 'applyUpdateBtn']) {
+        const button = document.getElementById(id);
+        if (!button) continue;
+
+        button.disabled = true;
+        button.title =
+            'Mise à jour réservée à l’administration du serveur';
+    }
+
+
+    const controls = [
+        DOM.autoSyncCheckbox,
+        DOM.adShieldCheckbox,
+        DOM.autoUpdateCheckbox,
+        DOM.discordRpcCheckbox,
+        DOM.syncAutoBtn
+    ];
+
+    for (const control of controls) {
+        if (!control) continue;
+        control.disabled = true;
+        control.title =
+            'Réservé à une future administration du serveur';
+
+        if (control.type === 'checkbox') {
+            control.checked = false;
+            control.indeterminate = true;
+        }
+    }
+
+    if (DOM.syncStatus) {
+        DOM.syncStatus.textContent =
+            'Synchronisation cloud indisponible en mode multi-utilisateurs.';
+    }
+}
+
 async function openAccountModal() {
     DOM.accountModal.classList.add('open');
     document.body.style.overflow = 'hidden';
+
     if (typeof renderLangSelectors === 'function') {
         renderLangSelectors();
     }
 
-    const activeTab = document.querySelector('.netflix-sidebar-item.active');
+    const activeTab = document.querySelector(
+        '.netflix-sidebar-item.active'
+    );
     if (!activeTab) {
         switchSettingsTab('account');
     }
 
-    fetch('/api/settings')
-        .then(r => r.json())
-        .then(d => {
-            if (DOM.autoSyncCheckbox) DOM.autoSyncCheckbox.checked = !!d.auto_sync;
-            if (DOM.adShieldCheckbox) DOM.adShieldCheckbox.checked = d.ad_shield !== false;
-            if (DOM.autoUpdateCheckbox) DOM.autoUpdateCheckbox.checked = d.auto_update !== false;
-            if (DOM.discordRpcCheckbox) DOM.discordRpcCheckbox.checked = d.discord_rpc !== false;
-            if (d.version) updateCurrentVersionDisplay(d.version);
-        })
-        .catch(() => {});
+    // Réutiliser les panneaux existants sans appeler
+    // l'ancienne authentification Anime-Sama cloud.
+    DOM.modeCloudBtn.removeAttribute('data-i18n');
+    DOM.modeCloudBtn.textContent = 'Compte local';
+    DOM.modeLocalBtn.removeAttribute('data-i18n');
+    DOM.modeLocalBtn.textContent = 'Stockage navigateur';
 
-    await refreshAccountStatus(true);
-    switchAccountMode(State.loggedIn ? 'cloud' : 'local');
+    disableGlobalSettingsControls();
+
+    // L'écran du compte est le panneau précédemment
+    // nommé "cloud" dans les identifiants HTML.
+    switchAccountMode('cloud');
+    await refreshAccountStatus();
 }
 
 function closeAccountModal() {
@@ -57,18 +193,17 @@ function closeAccountModal() {
 }
 
 function switchAccountMode(mode) {
-    DOM.modeLocalBtn.classList.toggle('active', mode === 'local');
-    DOM.modeCloudBtn.classList.toggle('active', mode === 'cloud');
-    DOM.panelLocal.style.display = mode === 'local' ? 'block' : 'none';
+    const showStorage = mode === 'local';
 
-    if (mode === 'local') {
-        DOM.panelCloudLoggedOut.style.display = 'none';
-        DOM.panelCloudLoggedIn.style.display = 'none';
-        return;
-    }
+    DOM.modeLocalBtn.classList.toggle('active', showStorage);
+    DOM.modeCloudBtn.classList.toggle('active', !showStorage);
+    DOM.panelLocal.style.display =
+        showStorage ? 'block' : 'none';
 
-    DOM.panelCloudLoggedOut.style.display = State.loggedIn ? 'none' : 'block';
-    DOM.panelCloudLoggedIn.style.display = State.loggedIn ? 'block' : 'none';
+    DOM.panelCloudLoggedOut.style.display =
+        showStorage || localAccountUser ? 'none' : 'block';
+    DOM.panelCloudLoggedIn.style.display =
+        showStorage || !localAccountUser ? 'none' : 'block';
 }
 
 function toggleAccountForms(which) {
@@ -82,156 +217,182 @@ function showAccountError(message) {
     DOM.accountError.style.display = 'block';
 }
 
-async function handleAccountLogin(e) {
-    e.preventDefault();
-    const pseudo = document.getElementById('accountLoginPseudo').value.trim();
-    const password = document.getElementById('accountLoginPassword').value;
+async function localAccountPost(path, payload) {
+    const response = await fetch(path, {
+        method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload || {})
+    });
+
+    let data = {};
+    try {
+        data = await response.json();
+    } catch (_) {}
+
+    if (!response.ok) {
+        throw new Error(
+            data.error || `Erreur HTTP ${response.status}`
+        );
+    }
+
+    return data;
+}
+
+async function completeLocalLogin(username, password) {
+    await localAccountPost(
+        '/api/local-auth/login',
+        { username, password }
+    );
+
+    const cache = window.CataclysePlaybackCache;
+
+    if (!cache || typeof cache.refresh !== 'function') {
+        throw new Error('Gestionnaire de session indisponible');
+    }
+
+    await cache.refresh();
+    const verified = await refreshAccountStatus();
+
+    if (!verified || !localAccountUser) {
+        throw new Error('Session locale non vérifiée');
+    }
+
+    if (typeof reloadActiveAccountViews === 'function') {
+        await reloadActiveAccountViews();
+    }
+
+    switchAccountMode('cloud');
+    DOM.accountError.style.display = 'none';
+    return true;
+}
+
+async function handleAccountLogin(event) {
+    event.preventDefault();
+
+    const username = document.getElementById(
+        'accountLoginPseudo'
+    ).value.trim();
+    const password = document.getElementById(
+        'accountLoginPassword'
+    ).value;
 
     try {
-        const res = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pseudo, password })
-        });
-        const data = await res.json();
-        if (!res.ok) {
-            showAccountError(data.error || 'Erreur de connexion');
-            return;
-        }
-        DOM.accountError.style.display = 'none';
-        applyAccountStatus({ logged_in: true, pseudo: data.pseudo });
-        switchAccountMode('cloud');
-        showToast(t('toast.connected', 'Connecté à anime-sama.to'));
-    } catch (err) {
-        showAccountError('Erreur de connexion au serveur local.');
+        await completeLocalLogin(username, password);
+
+        document.getElementById(
+            'accountLoginPassword'
+        ).value = '';
+
+        showToast('Connecté au compte local');
+    } catch (error) {
+        showAccountError(error.message);
     }
 }
 
-async function handleAccountRegister(e) {
-    e.preventDefault();
-    const pseudo = document.getElementById('accountRegisterPseudo').value.trim();
-    const password = document.getElementById('accountRegisterPassword').value;
-    const password2 = document.getElementById('accountRegisterPassword2').value;
+async function handleAccountRegister(event) {
+    event.preventDefault();
 
-    if (password !== password2) {
-        showAccountError('Les mots de passe ne correspondent pas');
+    const username = document.getElementById(
+        'accountRegisterPseudo'
+    ).value.trim();
+    const password = document.getElementById(
+        'accountRegisterPassword'
+    ).value;
+    const confirmation = document.getElementById(
+        'accountRegisterPassword2'
+    ).value;
+
+    if (password !== confirmation) {
+        showAccountError(
+            'Les mots de passe ne correspondent pas'
+        );
         return;
     }
 
     try {
-        const res = await fetch('/api/auth/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pseudo, password })
-        });
-        const data = await res.json();
-        if (!res.ok) {
-            showAccountError(data.error || 'Erreur de création de compte');
-            return;
-        }
-        DOM.accountError.style.display = 'none';
-        applyAccountStatus({ logged_in: true, pseudo: data.pseudo });
-        switchAccountMode('cloud');
-        showToast(t('toast.connected', 'Compte créé et connecté'));
-    } catch (err) {
-        showAccountError('Erreur de connexion au serveur local.');
+        // L'inscription ne suppose pas une connexion automatique.
+        await localAccountPost(
+            '/api/local-auth/register',
+            { username, password }
+        );
+
+        await completeLocalLogin(username, password);
+
+        document.getElementById(
+            'accountRegisterPassword'
+        ).value = '';
+        document.getElementById(
+            'accountRegisterPassword2'
+        ).value = '';
+
+        showToast('Compte local créé et connecté');
+    } catch (error) {
+        showAccountError(error.message);
     }
 }
 
 async function handleAccountLogout() {
     try {
-        await fetch('/api/auth/logout', { method: 'POST' });
-    } catch (e) {}
-    applyAccountStatus({ logged_in: false, pseudo: null });
-    switchAccountMode('cloud');
-    showToast(t('toast.disconnected', 'Déconnecté'));
-}
+        await localAccountPost('/api/local-auth/logout', {});
 
-async function handleAutoSyncToggle(e) {
-    const enabled = e.target.checked;
-    try {
-        await fetch('/api/settings/auto-sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enabled })
-        });
-        showToast(enabled ? t('settings.autosync_enabled', 'Synchronisation automatique activée') : t('settings.autosync_disabled', 'Synchronisation automatique désactivée'));
-        if (enabled) runSync('auto');
-    } catch (err) {
-        showToast('Impossible de sauvegarder ce réglage');
-        e.target.checked = !enabled;
-    }
-}
-
-async function handleAdShieldToggle(e) {
-    const enabled = e.target.checked;
-    try {
-        await fetch('/api/settings/ad-shield', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enabled })
-        });
-        showToast(enabled ? t('settings.adshield_enabled', 'Ad Shield activé') : t('settings.adshield_disabled', 'Ad Shield désactivé'));
-    } catch (err) {
-        showToast('Impossible de sauvegarder ce réglage');
-        e.target.checked = !enabled;
-    }
-}
-
-async function handleAutoUpdateToggle(e) {
-    const enabled = e.target.checked;
-    try {
-        await fetch('/api/settings/auto-update', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enabled })
-        });
-        showToast(enabled ? t('settings.autoupdate_enabled', 'Mise à jour automatique activée') : t('settings.autoupdate_disabled', 'Mise à jour automatique désactivée'));
-    } catch (err) {
-        showToast(t('settings.save_error', 'Impossible de sauvegarder ce réglage'));
-        e.target.checked = !enabled;
-    }
-}
-
-async function handleDiscordRpcToggle(e) {
-    const enabled = e.target.checked;
-    try {
-        await fetch('/api/settings/discord-rpc', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enabled })
-        });
-        showToast(enabled ? t('settings.discord_rpc_enabled', 'Discord Rich Presence activé') : t('settings.discord_rpc_disabled', 'Discord Rich Presence désactivé'));
-    } catch (err) {
-        showToast(t('settings.save_error', 'Impossible de sauvegarder ce réglage'));
-        e.target.checked = !enabled;
-    }
-}
-
-async function runSync(direction = 'auto') {
-    DOM.syncAutoBtn.disabled = true;
-    DOM.syncAutoBtn.classList.add('syncing');
-    DOM.syncStatus.textContent = t('settings.sync_in_progress', 'Synchronisation en cours...');
-
-    try {
-        const res = await fetch(`/api/sync/${direction}`, { method: 'POST' });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Erreur de synchronisation');
-
-        if (data.userdata) {
-            State.userData = data.userdata;
-            updateWatchlistCount();
+        const cache = window.CataclysePlaybackCache;
+        if (!cache || typeof cache.refresh !== 'function') {
+            throw new Error('Gestionnaire de session indisponible');
         }
 
-        DOM.syncStatus.textContent = `Synchronisé : ${data.updated_local} en local, ${data.updated_cloud} vers le cloud.`;
-        showToast(t('toast.sync_success', 'Synchronisation réussie'));
-    } catch (e) {
-        DOM.syncStatus.textContent = 'Échec de la synchronisation : ' + e.message;
-        showToast(t('toast.sync_fail', 'Échec de la synchronisation'));
-    } finally {
-        DOM.syncAutoBtn.disabled = false;
-        DOM.syncAutoBtn.classList.remove('syncing');
+        await cache.refresh();
+        const verified = await refreshAccountStatus();
+
+        if (!verified || localAccountUser !== null) {
+            throw new Error('Déconnexion non vérifiée');
+        }
+
+        if (typeof reloadActiveAccountViews === 'function') {
+            await reloadActiveAccountViews();
+        }
+
+        switchAccountMode('cloud');
+        showToast('Déconnecté du compte local');
+    } catch (error) {
+        showAccountError(error.message);
     }
+}
+
+function rejectGlobalSettingToggle(event) {
+    if (event?.target) {
+        event.target.checked = false;
+        event.target.indeterminate = true;
+    }
+    showToast('Réglage réservé à l’administration du serveur');
+    return false;
+}
+
+async function handleAutoSyncToggle(event) {
+    return rejectGlobalSettingToggle(event);
+}
+
+async function handleAdShieldToggle(event) {
+    return rejectGlobalSettingToggle(event);
+}
+
+async function handleAutoUpdateToggle(event) {
+    return rejectGlobalSettingToggle(event);
+}
+
+async function handleDiscordRpcToggle(event) {
+    return rejectGlobalSettingToggle(event);
+}
+
+async function runSync() {
+    if (DOM.syncStatus) {
+        DOM.syncStatus.textContent =
+            'Synchronisation cloud indisponible en mode multi-utilisateurs.';
+    }
+    return false;
 }
 
 let currentUpdateInfo = null;
@@ -258,6 +419,10 @@ function updateCurrentVersionDisplay(version) {
 }
 
 async function checkForUpdates(silent = false) {
+    // GLOBAL_MAINTENANCE_UI_LOCK_11F9
+    // Réservé à une future administration explicite.
+    return false;
+
     const btn = document.getElementById('checkUpdateBtn');
     const title = document.getElementById('updateStatusTitle');
     const desc = document.getElementById('updateStatusDesc');
@@ -323,6 +488,10 @@ async function checkForUpdates(silent = false) {
 }
 
 function checkForUpdatesManual() {
+    // GLOBAL_MAINTENANCE_UI_LOCK_11F9
+    // Réservé à une future administration explicite.
+    return false;
+
     checkForUpdates(false);
 }
 
@@ -515,6 +684,10 @@ function startUpdateStepTracking(targetVersion) {
 }
 
 async function applyUpdateDirect() {
+    // GLOBAL_MAINTENANCE_UI_LOCK_11F9
+    // Réservé à une future administration explicite.
+    return false;
+
     const applyBtn = document.getElementById('applyUpdateBtn');
     if (applyBtn) {
         applyBtn.disabled = true;
@@ -543,6 +716,10 @@ async function applyUpdateDirect() {
 }
 
 async function runAutoUpdateOnLaunch() {
+    // GLOBAL_MAINTENANCE_UI_LOCK_11F9
+    // Réservé à une future administration explicite.
+    return false;
+
     try {
         const isPlayerActive = () => {
             const modal = document.getElementById('playerModal');

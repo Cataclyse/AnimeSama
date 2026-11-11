@@ -1,12 +1,139 @@
-async function loadUserData() {
-    try {
-        const res = await fetch('/api/user');
-        if (res.ok) {
-            State.userData = await res.json();
-            updateWatchlistCount();
+function emptyAccountUserData() {
+    return {
+        watchlist: [],
+        favorites: [],
+        history: [],
+        playback_positions: [],
+        dismissed_continue: [],
+        auto_sync: false
+    };
+}
+
+let accountProfileSequence = 0;
+let accountProfileController = null;
+
+function clearAccountUserData() {
+    State.userData = emptyAccountUserData();
+
+    if (typeof updateWatchlistCount === 'function') {
+        updateWatchlistCount();
+    }
+}
+
+function sameProfileIdentity(identity) {
+    const cache = window.CataclysePlaybackCache;
+
+    if (!cache || typeof cache.snapshot !== 'function') {
+        return false;
+    }
+
+    const current = cache.snapshot();
+
+    return current.id === identity.id &&
+        current.generation === identity.generation;
+}
+
+window.addEventListener(
+    'cataclyse-playback-identity-change',
+    () => {
+        accountProfileSequence += 1;
+
+        if (accountProfileController) {
+            accountProfileController.abort();
+            accountProfileController = null;
         }
-    } catch (e) {
-        console.error('Erreur chargement profil utilisateur:', e);
+
+        clearAccountUserData();
+    }
+);
+
+async function loadUserData() {
+    const cache = window.CataclysePlaybackCache;
+
+    if (!cache ||
+        typeof cache.refresh !== 'function' ||
+        typeof cache.snapshot !== 'function') {
+        clearAccountUserData();
+        return false;
+    }
+
+    // L'identité est vérifiée avant de demander le profil.
+    const identity = await cache.refresh();
+
+    // Annuler le chargement précédent, même pour le même compte.
+    const sequence = ++accountProfileSequence;
+
+    if (accountProfileController) {
+        accountProfileController.abort();
+        accountProfileController = null;
+    }
+
+    clearAccountUserData();
+
+    if (!identity ||
+        !Number.isSafeInteger(identity.id) ||
+        identity.id <= 0 ||
+        !sameProfileIdentity(identity)) {
+        return false;
+    }
+
+    const controller = new AbortController();
+    accountProfileController = controller;
+
+    try {
+        const response = await fetch('/api/user', {
+            credentials: 'same-origin',
+            cache: 'no-store',
+            headers: {
+                'X-Cataclyse-Expected-User':
+                    String(identity.id)
+            },
+            signal: controller.signal
+        });
+
+        if (!response.ok) {
+            if (response.status === 401 ||
+                response.status === 403) {
+                void cache.refresh();
+            }
+            return false;
+        }
+
+        const data = await response.json();
+
+        // Protection contre les réponses tardives.
+        if (controller.signal.aborted ||
+            sequence !== accountProfileSequence ||
+            !sameProfileIdentity(identity)) {
+            return false;
+        }
+
+        if (!data ||
+            !Array.isArray(data.watchlist) ||
+            !Array.isArray(data.favorites) ||
+            !Array.isArray(data.history)) {
+            console.error(
+                '[AccountProfile] Réponse utilisateur invalide'
+            );
+            return false;
+        }
+
+        State.userData = data;
+        updateWatchlistCount();
+
+        return true;
+    } catch (error) {
+        if (error.name !== 'AbortError') {
+            console.error(
+                '[AccountProfile] Chargement impossible',
+                error
+            );
+        }
+        return false;
+    } finally {
+        if (accountProfileController === controller) {
+            accountProfileController = null;
+        }
     }
 }
 

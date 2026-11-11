@@ -75,6 +75,13 @@ fn init_database(conn: &Connection) -> Result<(), String> {
              PRIMARY KEY(user_id, slug, season, episode),
              FOREIGN KEY(user_id) REFERENCES users(id)
                  ON DELETE CASCADE
+         );
+
+         CREATE TABLE IF NOT EXISTS account_user_data (
+             user_id INTEGER PRIMARY KEY,
+             data_json TEXT NOT NULL,
+             FOREIGN KEY(user_id) REFERENCES users(id)
+                 ON DELETE CASCADE
          );"
     ).map_err(|e| e.to_string())
 }
@@ -747,4 +754,277 @@ mod tests {
         std::fs::remove_dir_all(directory).unwrap();
     }
 
+}
+
+
+// Données personnelles stockées séparément des paramètres globaux.
+// Les positions vidéo conservent leur table playback_positions.
+use super::data::UserData;
+
+#[derive(Debug)]
+pub enum AccountDataError {
+    Unauthorized,
+    Storage(String),
+}
+
+impl From<rusqlite::Error> for AccountDataError {
+    fn from(error: rusqlite::Error) -> Self {
+        Self::Storage(error.to_string())
+    }
+}
+
+fn account_data_owner(
+    conn: &Connection,
+    token: &str,
+) -> Result<i64, AccountDataError> {
+    match session_owner(conn, token) {
+        Ok(Some(user_id)) => Ok(user_id),
+        Ok(None) => Err(AccountDataError::Unauthorized),
+        Err(error) => Err(AccountDataError::Storage(
+            format!("{error:?}")
+        )),
+    }
+}
+
+fn read_account_data(
+    conn: &Connection,
+    user_id: i64,
+) -> Result<UserData, AccountDataError> {
+    let stored: Option<String> = conn.query_row(
+        "SELECT data_json
+         FROM account_user_data
+         WHERE user_id = ?1",
+        params![user_id],
+        |row| row.get(0),
+    ).optional()?;
+
+    match stored {
+        Some(json) => serde_json::from_str(&json)
+            .map_err(|e| AccountDataError::Storage(e.to_string())),
+        None => Ok(UserData::default()),
+    }
+}
+
+impl AccountStore {
+    pub fn user_data_for_session(
+        &self,
+        token: &str,
+    ) -> Result<UserData, AccountDataError> {
+        let conn = self.db.lock()
+            .map_err(|_| AccountDataError::Storage(
+                "Verrou SQLite indisponible".into()
+            ))?;
+
+        let user_id = account_data_owner(&conn, token)?;
+        read_account_data(&conn, user_id)
+    }
+
+    pub fn update_user_data_for_session<F, T>(
+        &self,
+        token: &str,
+        update: F,
+    ) -> Result<(T, UserData), AccountDataError>
+    where
+        F: FnOnce(&mut UserData) -> T,
+    {
+        let mut conn = self.db.lock()
+            .map_err(|_| AccountDataError::Storage(
+                "Verrou SQLite indisponible".into()
+            ))?;
+
+        let tx = conn.transaction_with_behavior(
+            TransactionBehavior::Immediate
+        )?;
+
+        let user_id = account_data_owner(&tx, token)?;
+        let mut data = read_account_data(&tx, user_id)?;
+
+        let result = update(&mut data);
+
+        let encoded = serde_json::to_string(&data)
+            .map_err(|e| AccountDataError::Storage(
+                e.to_string()
+            ))?;
+
+        tx.execute(
+            "INSERT INTO account_user_data(user_id, data_json)
+             VALUES (?1, ?2)
+             ON CONFLICT(user_id)
+             DO UPDATE SET data_json = excluded.data_json",
+            params![user_id, encoded],
+        )?;
+
+        tx.commit()?;
+
+        Ok((result, data))
+    }
+}
+
+#[cfg(test)]
+mod account_user_data_tests {
+    use super::*;
+
+    fn seeded_store() -> (AccountStore, String, String) {
+        let conn = Connection::open_in_memory().unwrap();
+        init_database(&conn).unwrap();
+
+        let alice = "a".repeat(64);
+        let bob = "b".repeat(64);
+
+        for (username, token) in [
+            ("alice", alice.as_str()),
+            ("bob", bob.as_str()),
+        ] {
+            conn.execute(
+                "INSERT INTO users(
+                    username, password_hash, created_at
+                 ) VALUES (?1, ?2, ?3)",
+                params![username, "test-only", now()],
+            ).unwrap();
+
+            let user_id = conn.last_insert_rowid();
+
+            conn.execute(
+                "INSERT INTO sessions(
+                    token_hash, user_id, created_at, expires_at
+                 ) VALUES (?1, ?2, ?3, ?4)",
+                params![
+                    token_hash(token),
+                    user_id,
+                    now(),
+                    now() + 3600
+                ],
+            ).unwrap();
+        }
+
+        (AccountStore {
+            db: Mutex::new(conn)
+        }, alice, bob)
+    }
+
+    #[test]
+    fn account_data_isolated_between_users() {
+        let (store, alice, bob) = seeded_store();
+
+        let (_, alice_data) = store
+            .update_user_data_for_session(&alice, |data| {
+                data.watchlist.push("frieren".into());
+                data.favorites.push("one-piece".into());
+                data.dismissed_continue.push("naruto".into());
+                data.history.push(
+                    super::super::data::HistoryEntry {
+                        slug: "frieren".into(),
+                        title: "Frieren".into(),
+                        season: "saison1/vostfr".into(),
+                        episode: 2,
+                        timestamp: 1234,
+                    }
+                );
+            })
+            .unwrap();
+
+        assert_eq!(alice_data.watchlist, vec!["frieren"]);
+        assert_eq!(alice_data.history.len(), 1);
+
+        let bob_data = store.user_data_for_session(&bob)
+            .unwrap();
+
+        assert!(bob_data.watchlist.is_empty());
+        assert!(bob_data.favorites.is_empty());
+        assert!(bob_data.history.is_empty());
+        assert!(bob_data.dismissed_continue.is_empty());
+
+        store.update_user_data_for_session(&bob, |data| {
+            data.watchlist.push("bleach".into());
+        }).unwrap();
+
+        let alice_again = store.user_data_for_session(&alice)
+            .unwrap();
+
+        assert_eq!(alice_again.watchlist, vec!["frieren"]);
+        assert_eq!(alice_again.favorites, vec!["one-piece"]);
+        assert_eq!(alice_again.history.len(), 1);
+    }
+
+    #[test]
+    fn revoked_session_cannot_read_or_modify_user_data() {
+        let (store, alice, _) = seeded_store();
+
+        {
+            let conn = store.db.lock().unwrap();
+            conn.execute(
+                "DELETE FROM sessions WHERE token_hash = ?1",
+                params![token_hash(&alice)],
+            ).unwrap();
+        }
+
+        assert!(matches!(
+            store.user_data_for_session(&alice),
+            Err(AccountDataError::Unauthorized)
+        ));
+
+        assert!(matches!(
+            store.update_user_data_for_session(&alice, |data| {
+                data.watchlist.push("frieren".into());
+            }),
+            Err(AccountDataError::Unauthorized)
+        ));
+    }
+
+    #[test]
+    fn account_data_survives_sqlite_reopen() {
+        let filename = format!(
+            "cataclyse-account-data-{}-{}.sqlite",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let path = std::env::temp_dir().join(filename);
+        let alice = "c".repeat(64);
+
+        {
+            let store = AccountStore::open(&path).unwrap();
+
+            {
+                let conn = store.db.lock().unwrap();
+                conn.execute(
+                    "INSERT INTO users(
+                        username, password_hash, created_at
+                     ) VALUES (?1, ?2, ?3)",
+                    params!["alice", "test-only", now()],
+                ).unwrap();
+
+                let id = conn.last_insert_rowid();
+
+                conn.execute(
+                    "INSERT INTO sessions(
+                        token_hash, user_id, created_at, expires_at
+                     ) VALUES (?1, ?2, ?3, ?4)",
+                    params![
+                        token_hash(&alice),
+                        id,
+                        now(),
+                        now() + 3600
+                    ],
+                ).unwrap();
+            }
+
+            store.update_user_data_for_session(
+                &alice,
+                |data| data.watchlist.push("frieren".into()),
+            ).unwrap();
+        }
+
+        {
+            let store = AccountStore::open(&path).unwrap();
+            let data = store.user_data_for_session(&alice)
+                .unwrap();
+
+            assert_eq!(data.watchlist, vec!["frieren"]);
+        }
+
+        let _ = std::fs::remove_file(&path);
+    }
 }

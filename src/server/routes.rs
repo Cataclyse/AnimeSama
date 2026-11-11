@@ -5,11 +5,77 @@ use crate::user::{HistoryEntry, PlaybackPosition};
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::thread;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 
+
+
+fn parse_expected_playback_id(
+    raw: Option<&str>,
+) -> Result<i64, u16> {
+    raw.and_then(|s| s.parse::<i64>().ok())
+        .filter(|id| *id > 0)
+        .ok_or(400)
+}
+
+fn checked_playback_session(
+    req: &tiny_http::Request,
+    accounts: &crate::user::accounts::AccountStore,
+) -> Result<String, u16> {
+    let token = request_local_token(req).ok_or(401u16)?;
+
+    let expected = parse_expected_playback_id(
+        req.headers()
+            .get("X-Cataclyse-Expected-User")
+            .map(|v| v.as_str())
+    )?;
+
+    match accounts.resolve(token) {
+        Ok(Some(user)) if user.id == expected => {
+            Ok(token.to_owned())
+        }
+        Ok(Some(_)) => Err(403),
+        Ok(None) => Err(401),
+        Err(_) => Err(500),
+    }
+}
+
+fn respond_playback_session_error(
+    req: tiny_http::Request,
+    status: u16,
+) {
+    let message = match status {
+        400 => "Compte attendu manquant ou invalide",
+        401 => "Session Cataclyse requise",
+        403 => "Session différente du compte attendu",
+        _ => "Authentification temporairement indisponible",
+    };
+
+    respond_error(req, status, message);
+}
+
+
+fn respond_private_data_error(
+    req: tiny_http::Request,
+    error: crate::user::accounts::AccountDataError,
+) {
+    use crate::user::accounts::AccountDataError;
+
+    match error {
+        AccountDataError::Unauthorized => {
+            respond_error(req, 401, "Session Cataclyse requise");
+        }
+        AccountDataError::Storage(detail) => {
+            eprintln!("[AccountData] Erreur SQLite : {}", detail);
+            respond_error(
+                req,
+                500,
+                "Données du compte indisponibles"
+            );
+        }
+    }
+}
 
 fn playback_error_status(
     error: &crate::user::accounts::PositionStoreError,
@@ -193,11 +259,18 @@ fn allow_local_auth(username: &str, signup: bool) -> bool {
 fn allowed_dev_request(
     req: &tiny_http::Request,
     method: &str,
+    allowed_port: u16,
 ) -> bool {
     let host = req.headers().get("Host").map(|v| v.as_str())
         .unwrap_or("");
 
-    if !matches!(host, "127.0.0.1:48621" | "localhost:48621") {
+    // Le port est celui réellement utilisé par start_server.
+    let allowed_ip = format!("127.0.0.1:{allowed_port}");
+    let allowed_localhost = format!("localhost:{allowed_port}");
+
+    if host != allowed_ip.as_str()
+        && host != allowed_localhost.as_str()
+    {
         return false;
     }
 
@@ -291,7 +364,9 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
     let url = req.url().to_string();
     let method = req.method().to_string();
 
-    if !allowed_dev_request(&req, &method) {
+    if !allowed_dev_request(
+        &req, &method, state.http_port
+    ) {
         respond_error(req, 403, "Origine HTTP non autorisée");
         return;
     }
@@ -318,6 +393,34 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
             crate::proxy::handle_proxy_request(req, raw_path, query_str, ad_shield);
             return;
         }
+    }
+
+    // GLOBAL_ROUTE_LOCKDOWN_11E
+    //
+    // Les fonctions héritées ci-dessous agissent sur
+    // l'ensemble du serveur, pas sur un compte local.
+    //
+    // Elles restent indisponibles jusqu'à l'ajout
+    // d'une autorisation administrateur explicite.
+    //
+    // Ne pas inclure /api/local-auth/ dans cette liste.
+    let global_route_disabled =
+        path.starts_with("/api/auth/")
+        || path.starts_with("/api/sync/")
+        || path == "/api/settings"
+        || path.starts_with("/api/settings/")
+        || path.starts_with("/api/rpc/")
+        || path.starts_with("/api/update/")
+        || path.starts_with("/api/open-")
+        || path == "/api/paths";
+
+    if global_route_disabled {
+        respond_error(
+            req,
+            403,
+            "Fonction globale temporairement indisponible",
+        );
+        return;
     }
 
     match (method.as_str(), path) {
@@ -488,43 +591,133 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
         }
 
         ("GET", "/api/user") => {
-            let data = state.user_mgr.get_data();
-            respond_json(req, &json!(data).to_string());
+            let token = match checked_playback_session(
+                &req,
+                &state.accounts,
+            ) {
+                Ok(token) => token,
+                Err(status) => {
+                    respond_playback_session_error(req, status);
+                    return;
+                }
+            };
+
+            match state.accounts.user_data_for_session(&token) {
+                Ok(mut data) => {
+                    // Les paramètres ci-dessous restent globaux.
+                    let server = state.user_mgr.get_data();
+
+                    data.ad_shield = server.ad_shield;
+                    data.auto_update = server.auto_update;
+                    data.discord_rpc = server.discord_rpc;
+
+                    // La synchronisation cloud héritée est globale.
+                    // Elle ne doit pas être activée pour un compte local.
+                    data.auto_sync = false;
+
+                    respond_json(
+                        req,
+                        &json!(data).to_string(),
+                    );
+                }
+
+                Err(
+                    crate::user::accounts::AccountDataError::Unauthorized
+                ) => {
+                    respond_error(
+                        req, 401, "Session Cataclyse requise"
+                    );
+                }
+
+                Err(
+                    crate::user::accounts::AccountDataError::Storage(error)
+                ) => {
+                    eprintln!(
+                        "[AccountData] Lecture impossible : {}",
+                        error
+                    );
+
+                    respond_error(
+                        req, 500,
+                        "Données du compte indisponibles"
+                    );
+                }
+            }
         }
 
+
         ("POST", "/api/watchlist/toggle") => {
+            let token = match checked_playback_session(
+                &req,
+                &state.accounts,
+            ) {
+                Ok(token) => token,
+                Err(status) => {
+                    respond_playback_session_error(req, status);
+                    return;
+                }
+            };
+
             let content = read_post_body_or_reply!(
                 req,
                 max_post_body_bytes(path),
             );
-            let parsed: Result<serde_json::Value, _> = serde_json::from_str(&content);
-            let slug = parsed
-                .ok()
-                .and_then(|v| v.get("slug").and_then(|s| s.as_str()).map(|s| s.to_string()))
+
+            let parsed: Result<serde_json::Value, _> =
+                serde_json::from_str(&content);
+
+            let slug = parsed.ok()
+                .and_then(|v| v.get("slug")
+                    .and_then(|s| s.as_str())
+                    .map(str::to_owned))
                 .unwrap_or_default();
 
-            if slug.is_empty() {
-                respond_error(req, 400, "Paramètre 'slug' requis");
+            if slug.is_empty() || slug.len() > 200 {
+                respond_error(req, 400, "Slug invalide");
                 return;
             }
 
-            let (in_list, data) = state.user_mgr.toggle_watchlist(&slug);
-            let resp = json!({
-                "slug": slug,
-                "in_watchlist": in_list,
-                "userdata": data
-            });
-            respond_json(req, &resp.to_string());
+            let result = state.accounts
+                .update_user_data_for_session(&token, |data| {
+                    if data.watchlist.iter().any(|s| s == &slug) {
+                        data.watchlist.retain(|s| s != &slug);
+                        false
+                    } else {
+                        data.watchlist.push(slug.clone());
+                        true
+                    }
+                });
+
+            match result {
+                Ok((in_list, mut data)) => {
+                    let global = state.user_mgr.get_data();
+
+                    data.auto_sync = false;
+                    data.ad_shield = global.ad_shield;
+                    data.auto_update = global.auto_update;
+                    data.discord_rpc = global.discord_rpc;
+
+                    respond_json(
+                        req,
+                        &json!({
+                            "slug": slug,
+                            "in_watchlist": in_list,
+                            "userdata": data
+                        }).to_string(),
+                    );
+                }
+                Err(error) => respond_private_data_error(req, error),
+            }
         }
 
-
         ("GET", "/api/playback/position") => {
-            let token = match request_local_token(&req) {
-                Some(token) => token.to_owned(),
-                None => {
-                    respond_error(
-                        req, 401, "Session Cataclyse requise"
-                    );
+            let token = match checked_playback_session(
+                &req,
+                &state.accounts,
+            ) {
+                Ok(token) => token,
+                Err(status) => {
+                    respond_playback_session_error(req, status);
                     return;
                 }
             };
@@ -559,12 +752,13 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
         }
 
         ("POST", "/api/playback/position") => {
-            let token = match request_local_token(&req) {
-                Some(token) => token.to_owned(),
-                None => {
-                    respond_error(
-                        req, 401, "Session Cataclyse requise"
-                    );
+            let token = match checked_playback_session(
+                &req,
+                &state.accounts,
+            ) {
+                Ok(token) => token,
+                Err(status) => {
+                    respond_playback_session_error(req, status);
                     return;
                 }
             };
@@ -599,40 +793,132 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
             }
         }
 
+
         ("POST", "/api/history") => {
+            let token = match checked_playback_session(
+                &req,
+                &state.accounts,
+            ) {
+                Ok(token) => token,
+                Err(status) => {
+                    respond_playback_session_error(req, status);
+                    return;
+                }
+            };
+
             let content = read_post_body_or_reply!(
                 req,
                 max_post_body_bytes(path),
             );
-            if let Ok(entry) = serde_json::from_str::<HistoryEntry>(&content) {
-                let data = state.user_mgr.add_history(entry);
-                respond_json(req, &json!(data).to_string());
 
-                if data.auto_sync && state.auth.is_logged_in() {
-                    let state = Arc::clone(&state);
-                    thread::spawn(move || {
-                        let _ = run_auto_sync(&state);
-                    });
+            let entry = match serde_json::from_str::<HistoryEntry>(
+                &content
+            ) {
+                Ok(entry)
+                    if !entry.slug.is_empty()
+                        && entry.slug.len() <= 200
+                        && entry.title.len() <= 500
+                        && !entry.season.is_empty()
+                        && entry.season.len() <= 100
+                        && (1..=10000).contains(&entry.episode)
+                        && entry.timestamp > 0 =>
+                {
+                    entry
                 }
-            } else {
-                respond_error(req, 400, "Données d'historique invalides");
+                _ => {
+                    respond_error(
+                        req, 400, "Données d'historique invalides"
+                    );
+                    return;
+                }
+            };
+
+            let result = state.accounts
+                .update_user_data_for_session(&token, |data| {
+                    data.dismissed_continue.retain(
+                        |slug| slug != &entry.slug
+                    );
+                    data.history.retain(
+                        |saved| saved.slug != entry.slug
+                    );
+                    data.history.insert(0, entry);
+                    data.history.truncate(50);
+                });
+
+            match result {
+                Ok(((), mut data)) => {
+                    let global = state.user_mgr.get_data();
+
+                    data.auto_sync = false;
+                    data.ad_shield = global.ad_shield;
+                    data.auto_update = global.auto_update;
+                    data.discord_rpc = global.discord_rpc;
+
+                    respond_json(req, &json!(data).to_string());
+                }
+                Err(error) => respond_private_data_error(req, error),
             }
         }
 
+
         ("POST", "/api/history/remove") => {
+            let token = match checked_playback_session(
+                &req,
+                &state.accounts,
+            ) {
+                Ok(token) => token,
+                Err(status) => {
+                    respond_playback_session_error(req, status);
+                    return;
+                }
+            };
+
             let content = read_post_body_or_reply!(
                 req,
                 max_post_body_bytes(path),
             );
-            let parsed: Result<serde_json::Value, _> = serde_json::from_str(&content);
-            if let Ok(val) = parsed {
-                if let Some(slug) = val.get("slug").and_then(|s| s.as_str()) {
-                    let data = state.user_mgr.remove_history(slug);
-                    respond_json(req, &json!(data).to_string());
-                    return;
-                }
+
+            let parsed: Result<serde_json::Value, _> =
+                serde_json::from_str(&content);
+
+            let slug = parsed.ok()
+                .and_then(|v| v.get("slug")
+                    .and_then(|s| s.as_str())
+                    .map(str::to_owned))
+                .unwrap_or_default();
+
+            if slug.is_empty() || slug.len() > 200 {
+                respond_error(req, 400, "Slug invalide");
+                return;
             }
-            respond_error(req, 400, "Paramètre 'slug' manquant");
+
+            let result = state.accounts
+                .update_user_data_for_session(&token, |data| {
+                    data.history.retain(
+                        |entry| entry.slug != slug
+                    );
+
+                    if !data.dismissed_continue
+                        .iter()
+                        .any(|s| s == &slug)
+                    {
+                        data.dismissed_continue.push(slug.clone());
+                    }
+                });
+
+            match result {
+                Ok(((), mut data)) => {
+                    let global = state.user_mgr.get_data();
+
+                    data.auto_sync = false;
+                    data.ad_shield = global.ad_shield;
+                    data.auto_update = global.auto_update;
+                    data.discord_rpc = global.discord_rpc;
+
+                    respond_json(req, &json!(data).to_string());
+                }
+                Err(error) => respond_private_data_error(req, error),
+            }
         }
 
         ("GET", "/api/img") => {
@@ -1220,5 +1506,33 @@ mod account_playback_route_tests {
             ),
             500
         );
+    }
+}
+
+
+#[cfg(test)]
+mod playback_identity_guard_tests {
+    use super::*;
+
+    #[test]
+    fn expected_account_id_must_be_positive_integer() {
+        assert_eq!(parse_expected_playback_id(Some("1")), Ok(1));
+        assert_eq!(parse_expected_playback_id(Some("42")), Ok(42));
+
+        for invalid in [
+            None,
+            Some(""),
+            Some("0"),
+            Some("-1"),
+            Some("alice"),
+            Some("1.5"),
+            Some("1,2"),
+            Some(" 1"),
+        ] {
+            assert_eq!(
+                parse_expected_playback_id(invalid),
+                Err(400)
+            );
+        }
     }
 }

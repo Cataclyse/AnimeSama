@@ -2,6 +2,14 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
     format!(
         r#"    var resumeTarget = {:.2};
     var asEpNum = {};
+    // PLAYBACK_SESSION_GUARD_11F10
+    var asSession = '';
+    try {{
+        asSession = new URLSearchParams(
+            window.location.hash.slice(1)
+        ).get('as_session') || '';
+    }} catch(e) {{}}
+
     try {{
         if (!resumeTarget || resumeTarget <= 0) {{
             resumeTarget = parseFloat(new URLSearchParams(window.location.search).get('as_resume') || '0');
@@ -43,6 +51,7 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
         try {{
             window.parent.postMessage({{
                 type: 'AS_PLAYBACK_PROGRESS',
+                asSession: asSession,
                 ep: asEpNum,
                 currentTime: v.currentTime,
                 duration: v.duration || 0,
@@ -57,7 +66,7 @@ pub fn get_bridge_script(resume_seconds: f64, episode_num: u32) -> String {
 
     function notify(type, extra) {{
         try {{
-            var msg = Object.assign({{ type: type }}, extra || {{}});
+            var msg = Object.assign({{ type: type, asSession: asSession }}, extra || {{}});
             window.parent.postMessage(msg, '*');
         }} catch(e) {{}}
     }}

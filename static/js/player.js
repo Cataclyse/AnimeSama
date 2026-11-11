@@ -44,6 +44,75 @@ let nativeHlsForceIframe = false;
 let nativeHlsGeneration = 0;
 let nativeHlsLastSave = 0;
 
+// PLAYBACK_SESSION_GUARD_11F10
+// Identifiant de corrélation propre à chaque iframe.
+// Ce n'est pas un jeton d'authentification.
+let iframePlaybackSession = null;
+let iframePlaybackIdentity = null;
+
+function createIframePlaybackSession() {
+    const cryptoApi = window.crypto;
+    if (!cryptoApi?.getRandomValues) return null;
+
+    const bytes = new Uint8Array(16);
+    cryptoApi.getRandomValues(bytes);
+
+    return Array.from(bytes, byte =>
+        byte.toString(16).padStart(2, '0')
+    ).join('');
+}
+
+function isCurrentPlaybackMessage(event) {
+    const frame = document.getElementById('videoIframe');
+    const modal = document.getElementById('playerModal');
+
+    if (
+        nativeHlsVideo ||
+        !frame?.contentWindow ||
+        !modal?.classList.contains('open') ||
+        !iframePlaybackSession ||
+        !iframePlaybackIdentity
+    ) {
+        return false;
+    }
+
+    // L'iframe sandboxée possède une origine opaque.
+    if (
+        event.source !== frame.contentWindow ||
+        event.origin !== 'null'
+    ) {
+        return false;
+    }
+
+    if (
+        !event.data ||
+        typeof event.data !== 'object' ||
+        event.data.asSession !== iframePlaybackSession
+    ) {
+        return false;
+    }
+
+    const current =
+        window.CataclysePlaybackCache?.snapshot?.();
+
+    return Boolean(
+        current &&
+        current.id === iframePlaybackIdentity.id &&
+        current.generation === iframePlaybackIdentity.generation
+    );
+}
+
+window.addEventListener(
+    'cataclyse-playback-identity-change',
+    () => {
+        iframePlaybackSession = null;
+        iframePlaybackIdentity = null;
+        ++nativeHlsGeneration;
+    }
+);
+
+
+
 function saveNativeHlsProgress(force = false) {
     const v = nativeHlsVideo;
     if (!v || !Number.isFinite(v.currentTime) || v.currentTime < 1) return;
@@ -790,6 +859,27 @@ function nextScanChapter() {
 
 async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) {
     const nativeGeneration = ++nativeHlsGeneration;
+
+    iframePlaybackSession = null;
+    iframePlaybackIdentity = null;
+
+    const openingIdentity =
+        window.CataclysePlaybackCache?.snapshot?.() || null;
+
+    const isOpeningCurrent = () => {
+        if (nativeGeneration !== nativeHlsGeneration) {
+            return false;
+        }
+
+        const current =
+            window.CataclysePlaybackCache?.snapshot?.() || null;
+
+        return (
+            openingIdentity?.id === current?.id &&
+            openingIdentity?.generation === current?.generation
+        );
+    };
+
     stopNativeHls();
     if (typeof unDismissContinue === 'function') {
         unDismissContinue(slug);
@@ -798,8 +888,11 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
         if (!State.currentAnime || State.currentAnime.slug !== slug) {
             try {
                 const aRes = await fetch(`/api/anime?slug=${encodeURIComponent(slug)}`);
+                if (!isOpeningCurrent()) return;
                 if (aRes.ok) {
-                    State.currentAnime = await aRes.json();
+                    const nextAnime = await aRes.json();
+                    if (!isOpeningCurrent()) return;
+                    State.currentAnime = nextAnime;
                 }
             } catch (e) {}
         }
@@ -813,20 +906,26 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
 
         if (!State.currentEpisodes || State.currentEpisodes.slug !== slug || State.currentEpisodes.season !== normalizedSeason) {
             let res = await fetch(`/api/episodes?slug=${slug}&season=${encodeURIComponent(normalizedSeason)}`);
+            if (!isOpeningCurrent()) return;
             if (!res.ok) {
                 const animeRes = await fetch(`/api/anime?slug=${slug}`);
+                if (!isOpeningCurrent()) return;
                 if (animeRes.ok) {
                     const animeData = await animeRes.json();
+                    if (!isOpeningCurrent()) return;
                     if (animeData.seasons && animeData.seasons.length > 0) {
                         let altSeason = animeData.seasons[0].path;
                         if (!altSeason.includes('/') && !altSeason.toLowerCase().startsWith('scan')) altSeason = `${altSeason}/vostfr`;
                         normalizedSeason = altSeason;
                         res = await fetch(`/api/episodes?slug=${slug}&season=${encodeURIComponent(normalizedSeason)}`);
+                        if (!isOpeningCurrent()) return;
                     }
                 }
             }
             if (!res.ok) throw new Error('Erreur récupération épisodes');
-            State.currentEpisodes = await res.json();
+            const nextEpisodes = await res.json();
+            if (!isOpeningCurrent()) return;
+            State.currentEpisodes = nextEpisodes;
             const players = Object.keys(State.currentEpisodes.players || {});
             State.selectedPlayer = pickBestPlayer(players, State.selectedPlayer);
         }
@@ -950,6 +1049,21 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
         })();
 
         const startIframePlayback = (resumeAt = resumeSeconds) => {
+            if (!isOpeningCurrent()) return;
+
+            const token = createIframePlaybackSession();
+
+            if (!token) {
+                console.error(
+                    '[Player] Identifiant de lecture indisponible'
+                );
+                showToast('Lecteur sécurisé indisponible');
+                return;
+            }
+
+            iframePlaybackSession = token;
+            iframePlaybackIdentity =
+                window.CataclysePlaybackCache?.snapshot?.() || null;
             const targetResume = (
                 Number.isFinite(resumeAt) && resumeAt >= 0
             ) ? resumeAt : 0;
@@ -983,7 +1097,9 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
                         }
                     }, 2000);
                 };
-                iframe.src = proxyUrl;
+                iframe.src =
+                    proxyUrl + '#as_session=' +
+                    encodeURIComponent(token);
             }
 
         };
@@ -1969,9 +2085,12 @@ function changeEpisode(delta) {
     }
 }
 
-function closePlayerModal() {
+function closePlayerModal(saveProgress = true) {
     ++nativeHlsGeneration;
-    stopNativeHls();
+
+    iframePlaybackSession = null;
+    iframePlaybackIdentity = null;
+    stopNativeHls(saveProgress);
     scanState.active = false;
     const scanViewport = document.getElementById('netflixScanViewport');
     const scanBar = document.getElementById('netflixScanBar');
@@ -1991,7 +2110,7 @@ function closePlayerModal() {
 
     stopPlayerPolling();
     stopDynamicFilter();
-    flushCurrentPlayback();
+    if (saveProgress) flushCurrentPlayback();
     clearInterval(playerState.nextCountdownTimer);
 
     const modal = document.getElementById('playerModal');
@@ -2165,6 +2284,7 @@ function initNetflixPlayerEvents() {
     document.addEventListener('webkitfullscreenchange', updateFullscreenIcons);
 
     window.addEventListener('message', (ev) => {
+        if (!isCurrentPlaybackMessage(ev)) return;
         if (nativeHlsVideo) return;
         if (!ev.data) return;
         const modal = document.getElementById('playerModal');

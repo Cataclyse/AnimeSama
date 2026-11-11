@@ -1,11 +1,156 @@
+// Les données publiques (catalogue) peuvent rester visibles.
+// Toutes les vues personnelles suivent l'identité locale.
+let appAccountReady = false;
+let appAccountRenderVersion = 0;
+
+function repaintAccountViews() {
+    const watchlist = new Set(
+        Array.isArray(State.userData?.watchlist)
+            ? State.userData.watchlist
+            : []
+    );
+
+    if (State.homeData && !State.homeData.error &&
+        typeof renderHomeRows === 'function') {
+        renderHomeRows();
+    }
+
+    if (typeof renderWatchlistView === 'function') {
+        renderWatchlistView();
+    }
+
+    if (typeof updateWatchlistButton === 'function') {
+        const slides = State.homeData?.slides;
+        const slide = Array.isArray(slides)
+            ? slides[State.currentSlide]
+            : null;
+
+        if (slide?.slug && DOM.heroListBtn) {
+            updateWatchlistButton(
+                DOM.heroListBtn,
+                watchlist.has(slide.slug)
+            );
+        }
+
+        if (State.currentAnime?.slug &&
+            DOM.modalWatchlistBtn) {
+            updateWatchlistButton(
+                DOM.modalWatchlistBtn,
+                watchlist.has(State.currentAnime.slug)
+            );
+        }
+
+        document.querySelectorAll('[data-card-watchlist]')
+            .forEach(button => {
+                const slug = button.dataset?.cardWatchlist;
+                if (slug) {
+                    updateWatchlistButton(
+                        button,
+                        watchlist.has(slug)
+                    );
+                }
+            });
+    }
+}
+
+async function reloadActiveAccountViews() {
+    const cache = window.CataclysePlaybackCache;
+    const version = ++appAccountRenderVersion;
+
+    if (!cache || typeof cache.snapshot !== 'function') {
+        repaintAccountViews();
+        return false;
+    }
+
+    const identity = cache.snapshot();
+    const loaded = await loadUserData();
+    const current = cache.snapshot();
+
+    if (
+        version !== appAccountRenderVersion ||
+        current.id !== identity.id ||
+        current.generation !== identity.generation
+    ) {
+        return false;
+    }
+
+    repaintAccountViews();
+    return loaded;
+}
+
+window.addEventListener(
+    'cataclyse-playback-identity-change',
+    () => {
+        // Invalider d'abord tous les rendus en attente.
+        ++appAccountRenderVersion;
+
+        // L'ancienne connexion cloud n'est plus utilisée.
+        State.loggedIn = false;
+        if (DOM.accountPseudo) {
+            DOM.accountPseudo.textContent = '';
+        }
+
+        // Vider immédiatement les données de l'ancien compte.
+        if (typeof clearAccountUserData === 'function') {
+            clearAccountUserData();
+        }
+
+        // Arrêter le lecteur sans enregistrer sa dernière
+        // position dans le compte nouvellement actif.
+        const playerOpen =
+            DOM.playerModal?.classList.contains('open');
+
+        if (playerOpen &&
+            typeof closePlayerModal === 'function') {
+            try {
+                closePlayerModal(false);
+            } catch (error) {
+                console.error(
+                    '[AccountViews] Fermeture lecteur impossible',
+                    error
+                );
+            }
+        }
+
+        if (DOM.detailModal?.classList.contains('open') &&
+            typeof closeDetailModal === 'function') {
+            closeDetailModal();
+        }
+
+        State.currentAnime = null;
+        State.currentEpisodes = null;
+        State.currentEpIndex = 0;
+        State.lastCurrentTime = 0;
+        State.lastDuration = 0;
+
+        repaintAccountViews();
+
+        if (appAccountReady) {
+            void reloadActiveAccountViews();
+        }
+    }
+);
+
 document.addEventListener('DOMContentLoaded', async () => {
     document.title = 'Anime-Sama — Page d\'accueil';
-    if (typeof sendNavigationRpc === 'function') sendNavigationRpc('Page d\'accueil');
     setupEventListeners();
-    await loadUserData();
+
+    // L'identité doit être connue avant tout rendu privé.
+    const cache = window.CataclysePlaybackCache;
+
+    if (cache && typeof cache.refresh === 'function') {
+        await cache.refresh();
+    }
+
+    // Le catalogue est public.
     await loadHomeData();
     await loadFullCatalogue();
-    await refreshAccountStatus();
+
+    appAccountReady = true;
+
+    // Le chargement final reprend l'identité actuelle,
+    // même si elle a changé pendant celui du catalogue.
+    await reloadActiveAccountViews();
 });
 
 function setupEventListeners() {
@@ -101,6 +246,9 @@ function setupEventListeners() {
 
     
     window.addEventListener('message', (event) => {
+        // PLAYBACK_SESSION_GUARD_11F10
+        if (!isCurrentPlaybackMessage(event)) return;
+
         if (event.data && event.data.type === 'AS_PLAYBACK_PROGRESS') {
             if (!DOM.playerModal || !DOM.playerModal.classList.contains('open')) return;
             const curTime = parseFloat(event.data.currentTime);

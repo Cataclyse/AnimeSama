@@ -265,16 +265,106 @@ function resumeAnimePlayback(slug, season, epIdx, curTime) {
     }
 }
 
+function addPrivateContinueProgress(continueMap, isDismissed) {
+    const cache = window.CataclysePlaybackCache;
+    const identity = cache?.snapshot?.();
+
+    if (!Number.isSafeInteger(identity?.id) ||
+        identity.id <= 0 ||
+        typeof cache.list !== 'function') {
+        return;
+    }
+
+    const positions = cache.list();
+
+    if (!Array.isArray(positions)) return;
+
+    for (const savedProg of positions) {
+        if (!savedProg ||
+            typeof savedProg.slug !== 'string') {
+            continue;
+        }
+
+        const slug = savedProg.slug;
+
+        if (!slug ||
+            isDismissed(slug) ||
+            continueMap.has(slug)) {
+            continue;
+        }
+
+        if (!(savedProg.currentTime > 5 ||
+              savedProg.episode)) {
+            continue;
+        }
+
+        const season = savedProg.season || 'saison1/vostfr';
+        const seasonBase = season.split('/')[0];
+        const seasonNum =
+            seasonBase.replace(/[^0-9]/g, '') || '1';
+
+        const ep = Number(savedProg.episode) || 1;
+
+        let dur = savedProg.duration > 60
+            ? savedProg.duration : 0;
+        let curTime = savedProg.currentTime || 0;
+
+        if (!curTime &&
+            typeof getEpisodeProgress === 'function') {
+            const episodeProgress = getEpisodeProgress(
+                slug, ep, season
+            );
+
+            if (episodeProgress?.currentTime) {
+                curTime = episodeProgress.currentTime;
+                if (!dur && episodeProgress.duration) {
+                    dur = episodeProgress.duration;
+                }
+            }
+        }
+
+        if (!dur || dur <= 60) dur = 1440;
+
+        const pct = curTime > 5
+            ? Math.min(
+                100,
+                Math.round(curTime / dur * 100)
+            )
+            : 0;
+
+        continueMap.set(slug, {
+            slug,
+            title: savedProg.title || slug,
+            season,
+            seasonNum,
+            episode: ep,
+            currentTime: curTime,
+            duration: dur,
+            progressPercent: pct,
+            timestamp: savedProg.timestamp || Date.now()
+        });
+    }
+}
+
 function renderContinueWatchingRow() {
     const oldRow = document.querySelector('.continue-row');
     if (oldRow) oldRow.remove();
 
-    let dismissed = [];
-    try {
-        dismissed = JSON.parse(localStorage.getItem('as_dismissed_continue') || '[]');
-    } catch (_) {}
-    const backendDismissed = (State.userData && State.userData.dismissed_continue) ? State.userData.dismissed_continue : [];
-    const isDismissed = (s) => dismissed.includes(s) || backendDismissed.includes(s);
+    const cache = window.CataclysePlaybackCache;
+    const identity = cache?.snapshot?.();
+
+    // Sans identité vérifiée, aucune donnée personnelle.
+    if (!Number.isSafeInteger(identity?.id) ||
+        identity.id <= 0) {
+        return;
+    }
+
+    const backendDismissed = Array.isArray(
+        State.userData?.dismissed_continue
+    ) ? State.userData.dismissed_continue : [];
+
+    const isDismissed = slug =>
+        backendDismissed.includes(slug);
 
     const history = (State.userData && State.userData.history) ? State.userData.history : [];
     const continueMap = new Map();
@@ -313,47 +403,7 @@ function renderContinueWatchingRow() {
         });
     }
 
-    try {
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && key.startsWith('as_progress_')) {
-                const slug = key.substring('as_progress_'.length);
-                if (slug && !isDismissed(slug) && !continueMap.has(slug)) {
-                    try {
-                        const savedProg = JSON.parse(localStorage.getItem(key));
-                        if (savedProg && (savedProg.currentTime > 5 || savedProg.episode)) {
-                            const season = savedProg.season || 'saison1/vostfr';
-                            const seasonBase = season.split('/')[0];
-                            const seasonNum = seasonBase.replace(/[^0-9]/g, '') || '1';
-                            const ep = savedProg.episode || 1;
-                            let dur = (savedProg.duration && savedProg.duration > 60) ? savedProg.duration : 0;
-                            let curTime = savedProg.currentTime || 0;
-                            if (!curTime && typeof getEpisodeProgress === 'function') {
-                                const epP = getEpisodeProgress(slug, ep, season);
-                                if (epP && epP.currentTime) {
-                                    curTime = epP.currentTime;
-                                    if (!dur && epP.duration) dur = epP.duration;
-                                }
-                            }
-                            if (!dur || dur <= 60) dur = 1440;
-                            const pct = (curTime > 5) ? Math.min(100, Math.round((curTime / dur) * 100)) : 0;
-                            continueMap.set(slug, {
-                                slug: slug,
-                                title: savedProg.title || slug,
-                                season: season,
-                                seasonNum: seasonNum,
-                                episode: ep,
-                                currentTime: curTime,
-                                duration: dur,
-                                progressPercent: pct,
-                                timestamp: savedProg.timestamp || Date.now()
-                            });
-                        }
-                    } catch (_) {}
-                }
-            }
-        }
-    } catch (_) {}
+    addPrivateContinueProgress(continueMap, isDismissed);
 
     const cards = Array.from(continueMap.values());
     if (!cards.length) return;
@@ -420,3 +470,13 @@ function createContinueCardHTML(c) {
         </div>
     `;
 }
+
+
+// Retirer immédiatement les cartes de l'ancien compte.
+window.addEventListener(
+    'cataclyse-playback-identity-change',
+    () => {
+        const oldRow = document.querySelector('.continue-row');
+        if (oldRow) oldRow.remove();
+    }
+);

@@ -13,6 +13,7 @@ use std::sync::Arc;
 use std::thread;
 
 pub struct AppState {
+    pub http_port: u16,
     pub catalog: CatalogData,
     pub catalog_error: Option<String>,
     pub scraper: Scraper,
@@ -96,6 +97,7 @@ pub fn start_server(port: u16) -> (Arc<AppState>, thread::JoinHandle<()>) {
     ).expect("Impossible d'initialiser les comptes Cataclyse");
 
     let state = Arc::new(AppState {
+        http_port: port,
         catalog,
         catalog_error,
         scraper: Scraper::new(),

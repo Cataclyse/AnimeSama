@@ -278,26 +278,25 @@ async function fetchAvailableLanguages() {
     } catch (_) {}
 }
 
+// GLOBAL_MAINTENANCE_UI_LOCK_11F9
+// Les dossiers appartiennent à la machine serveur.
+// Un utilisateur distant ne doit pas pouvoir les ouvrir.
 async function openLangFolder() {
-    try {
-        const res = await fetch('/api/open-lang-folder', { method: 'POST' });
-        if (res.ok) {
-            if (typeof showToast === 'function') {
-                showToast(t('toast.lang_folder_opened', 'Dossier des langues ouvert'));
-            }
-        }
-    } catch (_) {}
+    if (typeof showToast === 'function') {
+        showToast(
+            'Ouverture des dossiers serveur indisponible'
+        );
+    }
+    return false;
 }
 
 async function openAppDataFolder() {
-    try {
-        const res = await fetch('/api/open-appdata', { method: 'POST' });
-        if (res.ok) {
-            if (typeof showToast === 'function') {
-                showToast(t('toast.appdata_folder_opened', 'Dossier de l\'application ouvert'));
-            }
-        }
-    } catch (_) {}
+    if (typeof showToast === 'function') {
+        showToast(
+            'Ouverture des dossiers serveur indisponible'
+        );
+    }
+    return false;
 }
 
 async function refreshLanguages() {
