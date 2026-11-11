@@ -1,0 +1,42 @@
+--- a/episode_sources.py
++++ b/episode_sources.py
+@@ -12,7 +12,7 @@
+ 
+ # Domaine actuellement validé dans le pilote Rust.
+ # À étendre seulement après contrôle de la liste du proxy.
+-ALLOWED_MEDIA_DOMAINS = ("vmpx.online",)
++ALLOWED_MEDIA_DOMAINS = ("vmpx.online", "vmget.online")
+ 
+ 
+ def safe_https_host(raw, allow_fragment=False):
+@@ -83,8 +83,8 @@
+ 
+     with configure_safe_session(
+         requests.Session(),
+-        allowed_hosts=set(RESOLVER_MAP) | {"vmpx.online"},
+-        allowed_subdomains={"vmpx.online"},
++        allowed_hosts=set(RESOLVER_MAP) | {"vmpx.online", "vmget.online"},
++        allowed_subdomains={"vmpx.online", "vmget.online"},
+     ) as session:
+         for reader in readers[:10]:
+             original = reader.get("url", "")
+--- a/utils/resolvers.py
++++ b/utils/resolvers.py
+@@ -33,7 +33,7 @@
+         raise ValueError("Adaptateurs réseau invalides") from exc
+ 
+     expected_hosts = frozenset(RESOLVER_MAP) | {
+-        "vmpx.online"
++        "vmpx.online", "vmget.online"
+     }
+ 
+     if (
+@@ -41,7 +41,7 @@
+         or not isinstance(http_adapter, RejectHTTPAdapter)
+         or https_adapter.allowed_hosts != expected_hosts
+         or https_adapter.allowed_subdomains
+-            != frozenset({"vmpx.online"})
++            != frozenset({"vmpx.online", "vmget.online"})
+     ):
+         raise ValueError("Politique réseau non autorisée")
+ 

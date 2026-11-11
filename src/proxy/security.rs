@@ -21,6 +21,7 @@ const TRUSTED_HOSTS: &[&str] = &[
     "ansembed.net",
     "staticmoly.me",
     "vmpx.online",
+    "vmget.online",
     "vmcld.space",
     "sibnet.ru",
     "sendvid.com",
