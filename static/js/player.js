@@ -952,27 +952,42 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
             return;
         }
 
-        // 11G.1 : choix automatique parmi les lecteurs
-        // proposant réellement l'épisode demandé.
-        const players = Object.keys(State.currentEpisodes.players || {});
+        // 11G.3 : ne jamais ramener un épisode demandé
+        // vers le dernier épisode d'un autre diffuseur.
+        const episodeIndices =
+            getPlayableEpisodeIndices(State.currentEpisodes);
 
-        let safeIdx = parseInt(episodeIndex, 10);
-        if (isNaN(safeIdx) || safeIdx < 0) safeIdx = 0;
+        const safeIdx = Number.parseInt(episodeIndex, 10);
+
+        if (
+            !Number.isInteger(safeIdx) ||
+            safeIdx < 0 ||
+            !episodeIndices.includes(safeIdx)
+        ) {
+            showToast(t('player.link_unavailable',
+                "Lien d'épisode indisponible"));
+            return;
+        }
+
         episodeIndex = safeIdx;
+
+        const players =
+            Object.keys(State.currentEpisodes.players || {});
 
         const eligiblePlayers = players.filter(name => {
             const links = State.currentEpisodes.players[name];
             return Array.isArray(links) &&
-                typeof links[safeIdx] === 'string' &&
-                links[safeIdx].trim().length > 0;
+                typeof links[episodeIndex] === 'string' &&
+                links[episodeIndex].trim().length > 0;
         });
 
         State.selectedPlayer = eligiblePlayers.length
             ? pickBestPlayer(eligiblePlayers, null)
             : null;
 
-        const urls = State.currentEpisodes.players[State.selectedPlayer] || [];
-        let videoUrl = urls[episodeIndex];
+        const urls =
+            State.currentEpisodes.players[State.selectedPlayer] || [];
+        const videoUrl = urls[episodeIndex];
 
         if (!videoUrl) {
             showToast(t('player.link_unavailable', "Lien d'épisode indisponible"));
@@ -1159,8 +1174,10 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
 
         const prevBtn = document.getElementById('playerPrevBtn');
         const nextBtn = document.getElementById('playerNextBtn');
-        if (prevBtn) prevBtn.disabled = episodeIndex <= 0;
-        if (nextBtn) nextBtn.disabled = episodeIndex >= urls.length - 1;
+        if (prevBtn) prevBtn.disabled =
+            !episodeIndices.some(index => index < episodeIndex);
+        if (nextBtn) nextBtn.disabled =
+            !episodeIndices.some(index => index > episodeIndex);
 
         updateAppTitle(true);
         recordHistory(slug, episodeIndex + 1);
@@ -1743,17 +1760,17 @@ function checkNextEpisodePrompt(currentTime, duration) {
     if (!prompt || duration <= 60) return;
 
     if (currentTime >= duration - 40 && !playerState.nextPromptActive) {
-        playerState.nextPromptActive = true;
-        prompt.style.display = 'flex';
+        const nextIdx =
+            getPlayableEpisodeIndices(State.currentEpisodes)
+                .find(index => index > State.currentEpIndex);
 
-        const nextIdx = State.currentEpIndex + 1;
-        const urls = (State.currentEpisodes && State.selectedPlayer)
-            ? (State.currentEpisodes.players[State.selectedPlayer] || [])
-            : [];
-        if (nextIdx >= urls.length) {
+        if (nextIdx === undefined) {
             prompt.style.display = 'none';
             return;
         }
+
+        playerState.nextPromptActive = true;
+        prompt.style.display = 'flex';
 
         const titleEl = document.getElementById('netflixNextPromptTitle');
         if (titleEl) titleEl.textContent = `${t('modal.episode_single', 'Épisode')} ${nextIdx + 1}`;
@@ -1867,23 +1884,29 @@ function renderEpisodeDrawer() {
     const grid = document.getElementById('netflixDrawerGrid');
     if (!grid) return;
 
-    if (!State.currentEpisodes || !State.selectedPlayer) {
+    if (!State.currentEpisodes) {
         grid.innerHTML = '<div class="netflix-drawer-empty">Aucun épisode disponible</div>';
         return;
     }
 
-    const urls = State.currentEpisodes.players[State.selectedPlayer] || [];
+    const episodeIndices =
+        getPlayableEpisodeIndices(State.currentEpisodes);
+
+    if (!episodeIndices.length) {
+        grid.innerHTML = '<div class="netflix-drawer-empty">Aucun épisode disponible</div>';
+        return;
+    }
     const seasonName = formatSeasonLabel(State.currentEpisodes.season);
 
     const seasonTitle = document.getElementById('netflixDrawerSeasonTitle');
     const countEl = document.getElementById('netflixDrawerCount');
     if (seasonTitle) seasonTitle.textContent = seasonName;
-    if (countEl) countEl.textContent = `${urls.length} épisode${urls.length > 1 ? 's' : ''}`;
+    if (countEl) countEl.textContent = `${episodeIndices.length} épisode${episodeIndices.length > 1 ? 's' : ''}`;
 
     const slug = State.currentEpisodes.slug;
-    grid.innerHTML = urls.map((url, i) => {
+    grid.innerHTML = episodeIndices.map(i => {
         const isCurrent = i === State.currentEpIndex;
-        const prog = getEpisodeProgress(slug, i + 1);
+        const prog = getEpisodeProgress(slug, i + 1, State.currentEpisodes.season);
         const isSeen = prog && prog.duration > 0 && prog.currentTime >= prog.duration - 25;
         const pct = (prog && prog.duration > 0) ? Math.min(100, Math.round((prog.currentTime / prog.duration) * 100)) : (isSeen ? 100 : 0);
 
@@ -2078,20 +2101,49 @@ function changeEpisode(delta) {
 
     flushCurrentPlayback();
     clearInterval(playerState.nextCountdownTimer);
-    const newIdx = State.currentEpIndex + delta;
-    if (State.currentEpisodes) {
-        const players = Object.keys(State.currentEpisodes.players || {});
-        const p = State.selectedPlayer || players[0];
-        const urls = (State.currentEpisodes.players && p) ? (State.currentEpisodes.players[p] || []) : [];
-        if (newIdx >= 0 && newIdx < urls.length) {
-            openEpisodePlayer(State.currentEpisodes.slug, State.currentEpisodes.season, newIdx, null);
-        } else if (newIdx >= urls.length && delta > 0 && State.currentAnime && State.currentAnime.seasons) {
-            const currentSeasonBase = (State.currentEpisodes.season || '').split('/')[0];
-            const seasonIdx = State.currentAnime.seasons.findIndex(s => s.path.split('/')[0] === currentSeasonBase);
-            if (seasonIdx !== -1 && seasonIdx + 1 < State.currentAnime.seasons.length) {
-                const nextSeasonPath = getSeasonPathForLang(State.currentAnime.seasons[seasonIdx + 1].path, State.selectedLanguage);
-                openEpisodePlayer(State.currentEpisodes.slug, nextSeasonPath, 0, null);
-            }
+    if (!State.currentEpisodes || !delta) return;
+
+    const available =
+        getPlayableEpisodeIndices(State.currentEpisodes);
+
+    const newIdx = delta > 0
+        ? available.find(i => i > State.currentEpIndex)
+        : available.filter(i => i < State.currentEpIndex).pop();
+
+    if (newIdx !== undefined) {
+        openEpisodePlayer(
+            State.currentEpisodes.slug,
+            State.currentEpisodes.season,
+            newIdx,
+            null
+        );
+    } else if (
+        delta > 0 &&
+        State.currentAnime &&
+        State.currentAnime.seasons
+    ) {
+        const currentSeasonBase =
+            (State.currentEpisodes.season || '').split('/')[0];
+
+        const seasonIdx = State.currentAnime.seasons.findIndex(
+            s => s.path.split('/')[0] === currentSeasonBase
+        );
+
+        if (
+            seasonIdx !== -1 &&
+            seasonIdx + 1 < State.currentAnime.seasons.length
+        ) {
+            const nextSeasonPath = getSeasonPathForLang(
+                State.currentAnime.seasons[seasonIdx + 1].path,
+                State.selectedLanguage
+            );
+
+            openEpisodePlayer(
+                State.currentEpisodes.slug,
+                nextSeasonPath,
+                0,
+                null
+            );
         }
     }
 }

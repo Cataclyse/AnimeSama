@@ -470,11 +470,41 @@ function switchEpisodesView(view) {
     renderEpisodesGrid();
 }
 
-function renderEpisodesGrid() {
-    if (!State.currentEpisodes || !State.selectedPlayer) return;
-    const urls = State.currentEpisodes.players[State.selectedPlayer] || [];
+// 11G.3 : indices d'épisodes disponibles sur au moins
+// un diffuseur, indépendamment du lecteur précédemment choisi.
+function getPlayableEpisodeIndices(episodes) {
+    if (!episodes) return [];
 
-    if (!urls.length) {
+    const indices = new Set();
+
+    Object.values(episodes.players || {}).forEach(links => {
+        if (!Array.isArray(links)) return;
+
+        links.forEach((url, index) => {
+            if (typeof url === 'string' && url.trim()) {
+                indices.add(index);
+            }
+        });
+    });
+
+    // Les chapitres de scans ne nécessitent pas de lien vidéo.
+    if (String(episodes.season || '').toLowerCase().startsWith('scan')) {
+        const chapters = episodes.scan_data?.chapters;
+        if (Array.isArray(chapters)) {
+            chapters.forEach((_, index) => indices.add(index));
+        }
+    }
+
+    return [...indices].sort((a, b) => a - b);
+}
+
+function renderEpisodesGrid() {
+    if (!State.currentEpisodes) return;
+
+    const episodeIndices =
+        getPlayableEpisodeIndices(State.currentEpisodes);
+
+    if (!episodeIndices.length) {
         DOM.modalEpisodesGrid.innerHTML = `<div class="episodes-loading">${t('modal.no_links', 'Aucun lien disponible sur ce lecteur.')}</div>`;
         return;
     }
@@ -493,7 +523,7 @@ function renderEpisodesGrid() {
     const lastWatchedEp = historyItem ? historyItem.episode : 0;
 
     if (view === 'compact') {
-        DOM.modalEpisodesGrid.innerHTML = urls.map((url, idx) => {
+        DOM.modalEpisodesGrid.innerHTML = episodeIndices.map(idx => {
             const epNum = idx + 1;
             const isScan = season.toLowerCase().startsWith('scan') || !!(State.currentEpisodes && State.currentEpisodes.scan_data);
             const scanChap = (isScan && State.currentEpisodes && State.currentEpisodes.scan_data && State.currentEpisodes.scan_data.chapters)
@@ -526,7 +556,7 @@ function renderEpisodesGrid() {
         return;
     }
 
-    DOM.modalEpisodesGrid.innerHTML = urls.map((url, idx) => {
+    DOM.modalEpisodesGrid.innerHTML = episodeIndices.map(idx => {
         const epNum = idx + 1;
         const isScan = season.toLowerCase().startsWith('scan') || !!(State.currentEpisodes && State.currentEpisodes.scan_data);
         const scanChap = (isScan && State.currentEpisodes && State.currentEpisodes.scan_data && State.currentEpisodes.scan_data.chapters)
