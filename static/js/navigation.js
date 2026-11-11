@@ -11,6 +11,9 @@ function switchView(viewName) {
     document.querySelectorAll('.nav-link').forEach(link => {
         link.classList.toggle('active', link.dataset.view === viewName);
     });
+    if (typeof window.syncMobileNavigation === 'function') {
+        window.syncMobileNavigation(viewName);
+    }
 
     
     document.querySelectorAll('.view-section').forEach(view => {

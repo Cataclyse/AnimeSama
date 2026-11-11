@@ -17,6 +17,8 @@
     <link rel="stylesheet" href="/css/player.css">
     <link rel="stylesheet" href="/css/settings.css">
     <link rel="stylesheet" href="/css/responsive.css">
+    <link rel="stylesheet" href="/css/mobile-nav.css">
+    <link rel="stylesheet" href="/css/mobile-settings.css">
 
     <!-- 11G.1 : sources pilotées automatiquement -->
     <style id="cataclyse-auto-source-ui">
@@ -618,6 +620,7 @@
     <div class="modal-backdrop" id="accountModal">
         <div class="account-container">
             <div class="netflix-settings-header">
+                <button type="button" id="catMobileSettingsBack" aria-label="Retour aux rubriques des paramètres">← Retour</button>
                 <div class="netflix-settings-brand">
                     <h2 class="netflix-settings-title" data-i18n="settings.title">Paramètres</h2>
                     <span class="netflix-settings-badge" id="settingsVersionBadge">v0.1.24</span>
@@ -895,7 +898,9 @@
     <script src="/js/player.js"></script>
     <script src="/js/search.js"></script>
     <script src="/js/settings.js"></script>
+    <script src="/js/mobile-settings.js"></script>
     <script src="/js/navigation.js"></script>
+    <script src="/js/mobile-nav.js"></script>
     <script src="/js/app.js"></script>
     <script src="/js/playback-account-cache.js"></script>
     <script src="/js/playback-sync-account.js"></script>

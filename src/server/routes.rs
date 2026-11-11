@@ -268,8 +268,15 @@ fn allowed_dev_request(
     let allowed_ip = format!("127.0.0.1:{allowed_port}");
     let allowed_localhost = format!("localhost:{allowed_port}");
 
+    // Autorisation HTTPS optionnelle pour le proxy Tailscale DEV.
+    // L'hote doit correspondre exactement a la configuration systemd.
+    let tailnet_host = std::env::var("CATACLYSE_DEV_HTTPS_HOST").ok();
+    let is_tailnet_https = host.ends_with(".ts.net:8443")
+        && tailnet_host.as_deref() == Some(host);
+
     if host != allowed_ip.as_str()
         && host != allowed_localhost.as_str()
+        && !is_tailnet_https
     {
         return false;
     }
@@ -280,7 +287,11 @@ fn allowed_dev_request(
 
     let origin = req.headers().get("Origin").map(|v| v.as_str());
 
-    let expected = format!("http://{}", host);
+    let expected = if is_tailnet_https {
+        format!("https://{}", host)
+    } else {
+        format!("http://{}", host)
+    };
 
     if origin != Some(expected.as_str()) {
         return false;
