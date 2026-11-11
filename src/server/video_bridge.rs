@@ -67,7 +67,7 @@ pub fn resolve(
         .map(String::as_str)
         .unwrap_or("vostfr");
 
-    if version != "vf" && version != "vostfr" {
+    if !matches!(version, "vf" | "vf2" | "vostfr") {
         return Err((400, "Langue invalide"));
     }
 
@@ -249,7 +249,7 @@ pub fn sources(
         .map(String::as_str)
         .unwrap_or("vostfr");
 
-    if version != "vf" && version != "vostfr" {
+    if !matches!(version, "vf" | "vf2" | "vostfr") {
         return Err((400, "Langue invalide"));
     }
 

@@ -1268,7 +1268,7 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds, 
                     !recovery?.forceIframe &&
                     !nativeHlsForceIframe &&
                     !!animeTitle &&
-                    ['vf', 'vostfr'].includes(currentLang.toLowerCase());
+                    ['vf', 'vf2', 'vostfr'].includes(currentLang.toLowerCase());
             } catch (_) {
                 return false;
             }
