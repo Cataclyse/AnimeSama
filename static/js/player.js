@@ -874,8 +874,196 @@ function nextScanChapter() {
     }
 }
 
-async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) {
+
+// 11G.4 - Surveillance d'une source iframe.
+// Aucun choix de diffuseur n'est exposé à l'utilisateur.
+let iframeRecoveryMonitor = null;
+
+function stopIframeRecoveryMonitor() {
+    if (iframeRecoveryMonitor?.timer) {
+        clearInterval(iframeRecoveryMonitor.timer);
+    }
+    iframeRecoveryMonitor = null;
+}
+
+function observeIframeRecoverySignal(data) {
+    const monitor = iframeRecoveryMonitor;
+    if (!monitor || !data ||
+        iframePlaybackSession !== monitor.session) return;
+
+    const now = Date.now();
+
+    if (data.type === 'AS_PLAY_STATE' &&
+        typeof data.paused === 'boolean') {
+        if (monitor.paused === true && !data.paused) {
+            monitor.lastMoveAt = now;
+        }
+        monitor.paused = data.paused;
+    }
+
+    if (data.type === 'AS_WAITING' &&
+        typeof data.waiting === 'boolean') {
+        monitor.waiting = data.waiting;
+    }
+
+    if (data.type !== 'AS_PLAYBACK_PROGRESS') return;
+
+    if (typeof data.paused === 'boolean') {
+        if (monitor.paused === true && !data.paused) {
+            monitor.lastMoveAt = now;
+        }
+        monitor.paused = data.paused;
+    }
+
+    const time = Number(data.currentTime);
+    if (!Number.isFinite(time) || time < 0) return;
+
+    if (monitor.lastTime !== null) {
+        const difference = time - monitor.lastTime;
+
+        if (!monitor.paused && difference > 0.5) {
+            monitor.started = true;
+            monitor.lastMoveAt = now;
+            monitor.waiting = false;
+        } else if (difference < -2) {
+            // Recherche manuelle vers une position antérieure.
+            monitor.lastMoveAt = now;
+        }
+    }
+
+    monitor.lastTime = time;
+    monitor.position = time;
+}
+
+function startIframeRecoveryMonitor(options) {
+    stopIframeRecoveryMonitor();
+
+    const now = Date.now();
+    const monitor = {
+        ...options,
+        startedAt: now,
+        lastMoveAt: now,
+        lastTime: null,
+        position: null,
+        started: false,
+        waiting: false,
+        paused: null,
+        recovering: false,
+        timer: null
+    };
+
+    iframeRecoveryMonitor = monitor;
+
+    const isCurrent = () => {
+        if (iframeRecoveryMonitor !== monitor ||
+            monitor.generation !== nativeHlsGeneration ||
+            iframePlaybackSession !== monitor.session ||
+            nativeHlsVideo ||
+            !document.getElementById('playerModal')
+                ?.classList.contains('open') ||
+            State.currentEpisodes?.slug !== monitor.slug ||
+            State.currentEpIndex !== monitor.episodeIndex) {
+            return false;
+        }
+
+        const account =
+            window.CataclysePlaybackCache?.snapshot?.() || null;
+
+        return account?.id === monitor.identity?.id &&
+            account?.generation === monitor.identity?.generation;
+    };
+
+    monitor.timer = setInterval(() => {
+        if (!isCurrent()) {
+            stopIframeRecoveryMonitor();
+            return;
+        }
+
+        const now = Date.now();
+
+        // Ne pas interpréter l'absence d'activité en arrière-plan
+        // comme une panne du lecteur.
+        if (document.visibilityState === 'hidden') {
+            monitor.startedAt = now;
+            monitor.lastMoveAt = now;
+            return;
+        }
+
+        // Avant la première lecture, paused=true peut
+        // simplement indiquer un lecteur bloqué.
+        // Après démarrage, respecter les pauses volontaires.
+        if (
+            monitor.recovering ||
+            (monitor.started && monitor.paused === true)
+        ) return;
+
+        const noStart =
+            !monitor.started &&
+            now - monitor.startedAt >= 45000;
+
+        const stalled =
+            monitor.started &&
+            now - monitor.lastMoveAt >=
+                (monitor.waiting ? 30000 : 60000);
+
+        if (!noStart && !stalled) return;
+
+        monitor.recovering = true;
+
+        const tried = [...new Set([
+            ...(monitor.triedPlayers || []),
+            monitor.provider
+        ])];
+
+        const players = State.currentEpisodes?.players || {};
+
+        const alternatives = Object.keys(players).filter(name =>
+            !tried.includes(name) &&
+            Array.isArray(players[name]) &&
+            typeof players[name][monitor.episodeIndex] === 'string' &&
+            players[name][monitor.episodeIndex].trim()
+        );
+
+        // Avant le premier démarrage, préserver la
+        // reprise demandée plutôt qu'une position provisoire.
+        const position = (
+            monitor.started &&
+            Number.isFinite(monitor.position)
+        ) ? monitor.position : monitor.resumeSeconds;
+
+        stopIframeRecoveryMonitor();
+
+        if (!alternatives.length || tried.length >= 3) {
+            console.warn(
+                '[Player] Toutes les alternatives iframe épuisées'
+            );
+            showToast(
+                'Aucune autre source vidéo disponible pour cet épisode'
+            );
+            return;
+        }
+
+        console.warn(
+            '[Player] Basculement iframe automatique',
+            noStart ? 'démarrage absent' : 'lecture bloquée'
+        );
+
+        openEpisodePlayer(
+            monitor.slug,
+            monitor.season,
+            monitor.episodeIndex,
+            position,
+            {
+                forceIframe: true,
+                triedPlayers: tried
+            }
+        );
+    }, 2000);
+}
+
+async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds, recovery = null) {
     const nativeGeneration = ++nativeHlsGeneration;
+    stopIframeRecoveryMonitor();
 
     iframePlaybackSession = null;
     iframePlaybackIdentity = null;
@@ -974,7 +1162,13 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
         const players =
             Object.keys(State.currentEpisodes.players || {});
 
+        const triedPlayers = new Set(
+            Array.isArray(recovery?.triedPlayers)
+                ? recovery.triedPlayers : []
+        );
+
         const eligiblePlayers = players.filter(name => {
+            if (triedPlayers.has(name)) return false;
             const links = State.currentEpisodes.players[name];
             return Array.isArray(links) &&
                 typeof links[episodeIndex] === 'string' &&
@@ -1071,6 +1265,7 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
         const useNativeHls = (() => {
             try {
                 return location.port === '48621' &&
+                    !recovery?.forceIframe &&
                     !nativeHlsForceIframe &&
                     !!animeTitle &&
                     ['vf', 'vostfr'].includes(currentLang.toLowerCase());
@@ -1131,6 +1326,18 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
                 iframe.src =
                     proxyUrl + '#as_session=' +
                     encodeURIComponent(token);
+
+                startIframeRecoveryMonitor({
+                    generation: nativeGeneration,
+                    session: token,
+                    identity: openingIdentity,
+                    slug,
+                    season: normalizedSeason,
+                    episodeIndex,
+                    provider: State.selectedPlayer,
+                    triedPlayers: recovery?.triedPlayers || [],
+                    resumeSeconds: targetResume
+                });
             }
 
         };
@@ -2150,6 +2357,7 @@ function changeEpisode(delta) {
 
 function closePlayerModal(saveProgress = true) {
     ++nativeHlsGeneration;
+    stopIframeRecoveryMonitor();
 
     iframePlaybackSession = null;
     iframePlaybackIdentity = null;
@@ -2348,6 +2556,7 @@ function initNetflixPlayerEvents() {
 
     window.addEventListener('message', (ev) => {
         if (!isCurrentPlaybackMessage(ev)) return;
+        observeIframeRecoverySignal(ev.data);
         if (nativeHlsVideo) return;
         if (!ev.data) return;
         const modal = document.getElementById('playerModal');
