@@ -69,6 +69,7 @@
         menu.appendChild(button);
     }
 
+    addMenuItem('Retour', '', 'back');
     addMenuItem('Scans & Webtoons', 'scans');
     addMenuItem('Classiques', 'classiques');
     addMenuItem('Planning des sorties', 'planning');
@@ -88,6 +89,19 @@
 
     function toggleMenu() {
         const opening = menu.hidden;
+
+        const backButton = menu.querySelector(
+            '[data-mobile-action="back"]'
+        );
+
+        if (backButton) {
+            const available =
+                typeof window.cataclysePwaCanGoBack === 'function' &&
+                window.cataclysePwaCanGoBack();
+
+            backButton.style.display = available ? '' : 'none';
+        }
+
         menu.hidden = !opening;
         moreButton.setAttribute(
             'aria-expanded', String(opening)
@@ -170,6 +184,15 @@
     menu.addEventListener('click', event => {
         const button = event.target.closest('button');
         if (!button) return;
+
+        if (button.dataset.mobileAction === 'back') {
+            closeMenu();
+
+            if (typeof window.cataclysePwaGoBack === 'function') {
+                window.cataclysePwaGoBack();
+            }
+            return;
+        }
 
         if (button.dataset.mobileAction === 'settings') {
             closeMenu();
