@@ -1,0 +1,1290 @@
+--- a/src/api.py
++++ b/src/api.py
+@@ -113,7 +113,7 @@
+         if not title or not 1 <= episode <= 1000:
+             return jsonify({"error": "Parametres invalides"}), 400
+ 
+-        if version not in ("vf", "vostfr"):
++        if version not in ("vf", "vf2", "vostfr"):
+             return jsonify({"error": "Version invalide"}), 400
+ 
+         try:
+@@ -129,6 +129,63 @@
+                 "error": "Lecteurs temporairement indisponibles"
+             }), 502
+ 
++    @app.route('/api/getEpisodeSources', methods=["GET"])
++    def getEpisodeSources():
++        from .episode_sources import get_episode_sources
++
++        title = request.args.get("n", "").strip()
++        season = request.args.get("s", "saison1").strip()
++        version = request.args.get("v", "vostfr").strip()
++        mode = request.args.get("mode", "all").strip().lower()
++
++        if mode not in ("primary", "all"):
++            return jsonify({"error": "Mode invalide"}), 400
++
++        try:
++            episode = int(request.args.get("e", "1"))
++        except ValueError:
++            return jsonify({"error": "Episode invalide"}), 400
++
++        if (
++            not title
++            or len(title) > 160
++            or any(c.iscontrol() for c in [])
++        ):
++            return jsonify({"error": "Titre invalide"}), 400
++
++        if any(ord(c) < 32 or ord(c) == 127 for c in title):
++            return jsonify({"error": "Titre invalide"}), 400
++
++        if (
++            not season
++            or len(season) > 32
++            or not all(
++                c.isascii() and (c.isalnum() or c == "-")
++                for c in season
++            )
++            or version not in ("vf", "vf2", "vostfr")
++            or not 1 <= episode <= 1000
++        ):
++            return jsonify({"error": "Parametres invalides"}), 400
++
++        try:
++            result = get_episode_sources(
++                title, season, version, episode,
++                primary_only=(mode == "primary")
++            )
++
++            response = jsonify(result)
++            response.headers["Cache-Control"] = "no-store"
++            return response
++
++        except Exception:
++            Yui.app.logger.exception(
++                "Resolution cible indisponible"
++            )
++            return jsonify({
++                "error": "Sources temporairement indisponibles"
++            }), 502
++
+     @app.route('/api/getScanLink', methods=["GET"])
+     def getScanLink():
+         nom = request.args.get("n", "").strip() or request.args.get("q", "").strip()
+--- a/src/backend.py
++++ b/src/backend.py
+@@ -58,12 +58,25 @@
+         if not is_empty and not is_reset:
+             return "Fichier déjà existant. Ajoutez l'argument reset='True' pour tout actualiser."
+ 
+-        scraper = cloudscraper.create_scraper()  # équivaut à un navigateur
++        from .safe_transport import configure_safe_session
++        from .readers_listing import _fetch_anime_page
++
++        def fetch_catalogue(target_url):
++            # Une session indépendante par téléchargement :
++            # aucun partage de session entre les threads.
++            with configure_safe_session(
++                cloudscraper.create_scraper(),
++                {"anime-sama.to"},
++            ) as session:
++                response, _ = _fetch_anime_page(
++                    session, target_url
++                )
++                return response
+         max_pages = 1
+         page_1_html = ""
+ 
+         try:
+-            first_response = scraper.get(f"{base_url}/catalogue/fragment.php?page=1", timeout=10)
++            first_response = fetch_catalogue(f"{base_url}/catalogue/fragment.php?page=1")
+             if first_response.status_code == 200:
+                 json_data = first_response.json()
+                 page_1_html = json_data.get('liste', '')
+@@ -79,7 +92,7 @@
+             pass
+ 
+         if max_pages <= 1 and not page_1_html:
+-            first_response = scraper.get(f"{base_url}/catalogue", timeout=10)
++            first_response = fetch_catalogue(f"{base_url}/catalogue")
+             if first_response.status_code != 200:
+                 return first_response.status_code
+ 
+@@ -97,10 +110,10 @@
+                 return page_1_html
+             for _ in range(3):
+                 try:
+-                    r = scraper.get(f"{base_url}/catalogue/fragment.php?page={page_num}", timeout=10)
++                    r = fetch_catalogue(f"{base_url}/catalogue/fragment.php?page={page_num}")
+                     if r.status_code == 200:
+                         return r.json().get('liste', '')
+-                    r_cat = scraper.get(f"{base_url}/catalogue/?page={page_num}", timeout=10)
++                    r_cat = fetch_catalogue(f"{base_url}/catalogue/?page={page_num}")
+                     if r_cat.status_code == 200:
+                         return r_cat.content
+                 except Exception:
+@@ -393,9 +406,24 @@
+         best_score = scored_results[0]["score"] if scored_results else 0.0
+         if best_score < 98.0:
+             try:
+-                scraper = cloudscraper.create_scraper()
++                from .safe_transport import configure_safe_session
++
++                scraper = configure_safe_session(
++                    cloudscraper.create_scraper(),
++                    {"anime-sama.to"},
++                )
+                 base_url = BASE_URL if BASE_URL else Utils.findLink()
+-                r = scraper.get(f"{base_url}/catalogue/fragment.php?page=1&search={quote(cleaned_search)}", timeout=5)
++                # Destination vérifiée avant la connexion réseau.
++                from .readers_listing import _fetch_anime_page
++
++                recherche_url = (
++                    f"{base_url.rstrip('/')}/catalogue/"
++                    f"fragment.php?page=1&search={quote(cleaned_search)}"
++                )
++
++                r, _ = _fetch_anime_page(
++                    scraper, recherche_url
++                )
+                 if r.status_code == 200:
+                     json_resp = r.json()
+                     soup = BeautifulSoup(json_resp.get('liste', ''), 'html.parser')
+@@ -466,8 +494,16 @@
+         title = data[0]["title"]
+         cover = data[0].get("cover", "")
+ 
+-        scraper = cloudscraper.create_scraper()  # équivaut à un navigateur
+-        reponse = scraper.get(base_url)
++        from .safe_transport import configure_safe_session
++
++        scraper = configure_safe_session(
++            cloudscraper.create_scraper(),
++            {"anime-sama.to"},
++        )
++        # Réutilise les contrôles HTTPS et redirections du DEV.
++        # Import local pour éviter un cycle d'import au chargement.
++        from .readers_listing import _fetch_anime_page
++        reponse, base_url = _fetch_anime_page(scraper, base_url)
+         if reponse.status_code != 200:
+             return []
+         soup = BeautifulSoup(reponse.text, 'html.parser')
+@@ -597,7 +633,7 @@
+                 ).path.strip("/").split("/")
+ 
+                 if path_parts and path_parts[-1].lower() in (
+-                    "vf", "vostfr"
++                    "vf", "vf2", "vostfr"
+                 ):
+                     path_parts.pop()
+ 
+@@ -667,8 +703,8 @@
+ 
+         if version:
+             matched_copy = dict(matched)
+-            v_norm = "vf" if version.strip().lower() in ["vf", "dub", "french", "fr"] else "vostfr"
+-            base_saison_url = re.sub(r'/(?:vostfr|vf)/?$', '', matched_copy.get("url", ""), flags=re.IGNORECASE)
++            v_norm = "vf2" if version.strip().lower() == "vf2" else ("vf" if version.strip().lower() in ["vf", "dub", "french", "fr"] else "vostfr")
++            base_saison_url = re.sub(r'/(?:vostfr|vf2|vf)/?$', '', matched_copy.get("url", ""), flags=re.IGNORECASE)
+             base_saison_url = re.sub(r'(?<!:)//+', '/', base_saison_url)
+             matched_copy["url"] = f"{base_saison_url}/{v_norm}"
+             return matched_copy
+@@ -689,22 +725,39 @@
+         base_url = reponse.get("base_url", "")
+         url = reponse["url"]
+ 
+-        v_norm = "vf" if version.strip().lower() in ["vf", "dub", "french", "fr"] else "vostfr"
+-        new_url = re.sub(r'/(?:vostfr|vf)/?$', '', url, flags=re.IGNORECASE)
++        v_norm = "vf2" if version.strip().lower() == "vf2" else ("vf" if version.strip().lower() in ["vf", "dub", "french", "fr"] else "vostfr")
++        new_url = re.sub(r'/(?:vostfr|vf2|vf)/?$', '', url, flags=re.IGNORECASE)
+         new_url = re.sub(r'(?<!:)//+', '/', new_url)
+         link = f"{new_url}/{v_norm}"
+ 
+-        scraper = cloudscraper.create_scraper()
+-        second = scraper.get(link)
+-        if second.status_code != 200:
+-            if url != link:
+-                second = scraper.get(url)
+-                if second.status_code == 200:
+-                    link = url
+-                else:
+-                    return []
+-            else:
+-                return []
++        from .readers_listing import (
++            _fetch_anime_page,
++            _safe_episodes_js_url,
++        )
++
++        from .safe_transport import configure_safe_session
++
++        scraper = configure_safe_session(
++            cloudscraper.create_scraper(),
++            {"anime-sama.to"},
++        )
++        second = None
++
++        for candidate in dict.fromkeys((link, url)):
++            try:
++                response, final_link = _fetch_anime_page(
++                    scraper, candidate
++                )
++            except Exception:
++                continue
++
++            if response.status_code == 200:
++                second = response
++                link = final_link
++                break
++
++        if second is None:
++            return []
+ 
+         soup = BeautifulSoup(second.text, 'html.parser')
+         
+@@ -723,7 +776,21 @@
+         else:
+             jsfile = f"{link.rstrip('/')}/{js_link.lstrip('/')}"
+ 
+-        js_text = scraper.get(jsfile, headers={**headers, "Referer": link}).text
++        try:
++            jsfile = _safe_episodes_js_url(link, jsfile)
++            js_response = scraper.get(
++                jsfile,
++                headers={**headers, "Referer": link},
++                timeout=(4, 10),
++                allow_redirects=False,
++            )
++
++            if js_response.status_code != 200:
++                return []
++
++            js_text = js_response.text
++        except Exception:
++            return []
+         # Supporte eps1, eps2... ainsi que epsAS ou autres variantes de lecteurs
+         matches = re.findall(r"var\s+(eps\w+)\s*=\s*\[(.*?)\];", js_text, re.DOTALL)
+ 
+@@ -760,61 +827,68 @@
+         nombre_episodes = max(len(v) for v in all_eps.values())
+ 
+         def resolve_single_episode(ep_idx):
+-            session = requests.Session()
+-            fallback_url = None
+-            best_candidate = None
+-
+-            for lecteur in valid_lecteurs:
+-                eps_list = all_eps.get(lecteur, [])
+-                if ep_idx >= len(eps_list):
+-                    continue
+-
+-                url_to_test = eps_list[ep_idx].strip(" \t\n\r\xa0")
+-                if not url_to_test or "sibnet.ru" in url_to_test.lower():
+-                    if url_to_test and not fallback_url:
++            from .safe_transport import configure_safe_session
++            from .utils.resolvers import RESOLVER_MAP
++
++            with configure_safe_session(
++                requests.Session(),
++                allowed_hosts=set(RESOLVER_MAP) | {"vmpx.online"},
++                allowed_subdomains={"vmpx.online"},
++            ) as session:
++                fallback_url = None
++                best_candidate = None
++
++                for lecteur in valid_lecteurs:
++                    eps_list = all_eps.get(lecteur, [])
++                    if ep_idx >= len(eps_list):
++                        continue
++
++                    url_to_test = eps_list[ep_idx].strip(" \t\n\r\xa0")
++                    if not url_to_test or "sibnet.ru" in url_to_test.lower():
++                        if url_to_test and not fallback_url:
++                            fallback_url = url_to_test
++                        continue
++
++                    if not fallback_url:
+                         fallback_url = url_to_test
+-                    continue
+-
+-                if not fallback_url:
+-                    fallback_url = url_to_test
+-
+-                try:
+-                    resolved = resolve_video_url(url_to_test, session=session)
+-                except Exception:
+-                    resolved = None
+-
+-                if resolved and isinstance(resolved, dict):
+-                    resolved_url = resolved.get("url")
+-                    if resolved_url and resolved.get("type") in ("m3u8", "mp4"):
+-                        # Vérification de santé du stream
+-                        error_score, is_healthy = check_stream_health(resolved, session=session)
++
++                    try:
++                        resolved = resolve_video_url(url_to_test, session=session)
++                    except Exception:
++                        resolved = None
++
++                    if resolved and isinstance(resolved, dict):
++                        resolved_url = resolved.get("url")
++                        if resolved_url and resolved.get("type") in ("m3u8", "mp4"):
++                            # Vérification de santé du stream
++                            error_score, is_healthy = check_stream_health(resolved, session=session)
+                         
+-                        # 0 = stream vérifié actif et sain
+-                        if error_score == 0:
+-                            return {
+-                                "episode": ep_idx + 1,
+-                                "url": resolved_url
+-                            }
++                            # 0 = stream vérifié actif et sain
++                            if error_score == 0:
++                                return {
++                                    "episode": ep_idx + 1,
++                                    "url": resolved_url
++                                }
+                         
+-                        # Flux potentiellement valide mais lent à répondre (timeout/connexion lente)
+-                        elif is_healthy and error_score < 999:
+-                            if not best_candidate:
+-                                best_candidate = resolved_url
+-
+-            # Si aucun lecteur n'a pu être validé instantanément, utiliser le meilleur candidat
+-            if best_candidate:
+-                return {
+-                    "episode": ep_idx + 1,
+-                    "url": best_candidate
+-                }
+-
+-            # En dernier recours pour ne jamais rejeter l'épisode, retourner l'embed
+-            if fallback_url:
+-                return {
+-                    "episode": ep_idx + 1,
+-                    "url": fallback_url
+-                }
+-            return None
++                            # Flux potentiellement valide mais lent à répondre (timeout/connexion lente)
++                            elif is_healthy and error_score < 999:
++                                if not best_candidate:
++                                    best_candidate = resolved_url
++
++                # Si aucun lecteur n'a pu être validé instantanément, utiliser le meilleur candidat
++                if best_candidate:
++                    return {
++                        "episode": ep_idx + 1,
++                        "url": best_candidate
++                    }
++
++                # En dernier recours pour ne jamais rejeter l'épisode, retourner l'embed
++                if fallback_url:
++                    return {
++                        "episode": ep_idx + 1,
++                        "url": fallback_url
++                    }
++                return None
+ 
+         # Exécution en parallèle optimisée
+         max_workers = min(8, max(1, nombre_episodes))
+@@ -870,9 +944,22 @@
+ 
+         title = reponse["title"]
+         try:
+-            scraper = cloudscraper.create_scraper()
++            from .safe_transport import configure_safe_session
++            from .readers_listing import _fetch_anime_page
++
+             encoded_title = quote(title)
+-            chap_hashmap = scraper.get(f"https://anime-sama.to/s2/scans/get_nb_chap_et_img.php?oeuvre={encoded_title}", timeout=10)
++            request_url = (
++                "https://anime-sama.to/s2/scans/"
++                f"get_nb_chap_et_img.php?oeuvre={encoded_title}"
++            )
++
++            with configure_safe_session(
++                cloudscraper.create_scraper(),
++                {"anime-sama.to"},
++            ) as session:
++                chap_hashmap, _ = _fetch_anime_page(
++                    session, request_url
++                )
+             if chap_hashmap.status_code != 200:
+                 return {}
+             chap_information = Utils.transform_chapters(chap_hashmap.content, title)
+--- /dev/null
++++ b/src/episode_sources.py
+@@ -0,0 +1,182 @@
++import ipaddress
++import requests
++
++from urllib.parse import urlsplit
++
++from .readers_listing import get_episode_readers
++from .utils.resolvers import (
++    RESOLVER_MAP,
++    resolve_video_url,
++    check_stream_health,
++)
++
++# Domaine actuellement validé dans le pilote Rust.
++# À étendre seulement après contrôle de la liste du proxy.
++ALLOWED_MEDIA_DOMAINS = ("vmpx.online", "vmget.online")
++
++
++def safe_https_host(raw, allow_fragment=False):
++    if not isinstance(raw, str):
++        return None
++
++    try:
++        parsed = urlsplit(raw)
++        host = (parsed.hostname or "").lower().rstrip(".")
++
++        if (
++            parsed.scheme != "https"
++            or not host
++            or parsed.username
++            or parsed.password
++            or parsed.port is not None
++            or (parsed.fragment and not allow_fragment)
++            or host.endswith(".local")
++        ):
++            return None
++
++        try:
++            ipaddress.ip_address(host)
++            return None
++        except ValueError:
++            pass
++
++        if "." not in host:
++            return None
++
++        return host
++
++    except ValueError:
++        return None
++
++
++def allowed_media_host(host):
++    return any(
++        host == domain or host.endswith("." + domain)
++        for domain in ALLOWED_MEDIA_DOMAINS
++    )
++
++
++def get_episode_sources(title, season, version, episode, primary_only=False):
++    listing = get_episode_readers(
++        title, season, version, episode
++    )
++
++    readers = listing.get("readers", [])
++
++    if primary_only:
++        # Priorité aux lecteurs déjà validés dans le pilote.
++        # Le mode all conserve l'ordre original.
++        readers = sorted(
++            readers,
++            key=lambda r: (
++                0 if r.get("host") in (
++                    "ansembed.net", "ansembed.com"
++                ) else 1
++            )
++        )
++
++    sources = []
++    seen = set()
++
++    # Limite les résolutions effectuées pour une seule requête.
++    from .safe_transport import configure_safe_session
++
++    with configure_safe_session(
++        requests.Session(),
++        allowed_hosts=set(RESOLVER_MAP) | {"vmpx.online", "vmget.online"},
++        allowed_subdomains={"vmpx.online", "vmget.online"},
++    ) as session:
++        for reader in readers[:10]:
++            original = reader.get("url", "")
++            origin_host = safe_https_host(original, allow_fragment=True)
++
++            if not origin_host:
++                continue
++
++            # Une page externe n'est résolue que si son
++            # hébergeur figure dans notre registre connu.
++            if origin_host in RESOLVER_MAP:
++                try:
++                    resolved = resolve_video_url(
++                        original, session=session
++                    )
++                except Exception:
++                    continue
++
++            elif (
++                reader.get("type") in ("hls", "mp4")
++                and allowed_media_host(origin_host)
++            ):
++                resolved = {
++                    "url": original,
++                    "type": (
++                        "m3u8"
++                        if reader["type"] == "hls"
++                        else "mp4"
++                    )
++                }
++
++            else:
++                continue
++
++            if not isinstance(resolved, dict):
++                continue
++
++            url = resolved.get("url", "")
++            kind = resolved.get("type", "")
++
++            if kind not in ("m3u8", "mp4"):
++                continue
++
++            host = safe_https_host(url)
++
++            if (
++                not host
++                or not allowed_media_host(host)
++                or url in seen
++            ):
++                continue
++
++            # Le score 1 est incertain, pas vérifié.
++            try:
++                score, healthy = check_stream_health(
++                    resolved, session=session
++                )
++            except Exception:
++                continue
++
++            if not healthy or score >= 999:
++                continue
++
++            seen.add(url)
++
++            sources.append({
++                "reader": reader.get("reader"),
++                "provider": origin_host,
++                "host": host,
++                "type": "hls" if kind == "m3u8" else "mp4",
++                "health": (
++                    "verified" if score == 0 else "uncertain"
++                ),
++                "url": url
++            })
++
++            if primary_only and score == 0:
++                break
++
++    # Les sources vérifiées passent avant les incertaines.
++    sources.sort(
++        key=lambda source:
++        0 if source["health"] == "verified" else 1
++    )
++
++    if primary_only:
++        sources = sources[:1]
++
++    return {
++        "title": title,
++        "season": season,
++        "version": version,
++        "episode": episode,
++        "sources": sources
++    }
+--- a/src/readers_listing.py
++++ b/src/readers_listing.py
+@@ -1,10 +1,86 @@
+ import re
+-from urllib.parse import urljoin, urlparse
++from urllib.parse import urljoin, urlparse, urlsplit
+ 
+ import cloudscraper
++import requests
+ from bs4 import BeautifulSoup
+ 
+ from .backend import Cardinal, headers
++
++
++def _safe_episodes_js_url(page_url, script_src):
++    """Valide le fichier episodes.js avant toute requête."""
++    if (
++        not isinstance(script_src, str)
++        or not script_src
++        or len(script_src) > 2048
++        or any(ord(c) < 32 or ord(c) == 127 for c in script_src)
++    ):
++        raise ValueError("URL JavaScript invalide")
++
++    url = urljoin(
++        page_url.rstrip("/") + "/",
++        script_src
++    )
++
++    parsed = urlsplit(url)
++
++    if (
++        parsed.scheme != "https"
++        or parsed.hostname != "anime-sama.to"
++        or parsed.port is not None
++        or parsed.username is not None
++        or parsed.password is not None
++        or parsed.fragment
++    ):
++        raise ValueError(
++            "Destination episodes.js non autorisée"
++        )
++
++    return url
++
++
++def _fetch_anime_page(session, initial_url):
++    """Suit au maximum deux redirections HTTPS vers anime-sama.to."""
++    current = initial_url
++
++    for attempt in range(3):
++        parsed = urlsplit(current)
++
++        if (
++            parsed.scheme != "https"
++            or parsed.hostname != "anime-sama.to"
++            or parsed.port is not None
++            or parsed.username
++            or parsed.password
++            or parsed.fragment
++        ):
++            raise ValueError(
++                "Destination AnimeSama non autorisée"
++            )
++
++        response = session.get(
++            current,
++            timeout=(4, 10),
++            allow_redirects=False
++        )
++
++        if response.status_code not in (
++            301, 302, 303, 307, 308
++        ):
++            return response, current
++
++        location = response.headers.get("Location")
++        response.close()
++
++        if not location or attempt >= 2:
++            raise ValueError(
++                "Redirection absente ou limite dépassée"
++            )
++
++        current = urljoin(current, location)
++
++    raise ValueError("Trop de redirections")
+ 
+ 
+ def get_episode_readers(title, season, version, episode):
+@@ -14,53 +90,136 @@
+         return {"episode": episode, "readers": []}
+ 
+     page_url = details["url"]
+-    scraper = cloudscraper.create_scraper()
+-
+-    page = scraper.get(page_url, timeout=20)
++    from .safe_transport import configure_safe_session
++
++    scraper = configure_safe_session(
++        cloudscraper.create_scraper(),
++        {"anime-sama.to"},
++    )
++
++    page, page_url = _fetch_anime_page(scraper, page_url)
+     page.raise_for_status()
++    if page.status_code != 200:
++        raise ValueError("Réponse HTTP inattendue ou redirection refusée")
+ 
+     soup = BeautifulSoup(page.text, "html.parser")
+-    script = soup.find(
+-        "script",
+-        src=lambda s: s and "episodes.js" in s
+-    )
+-
+-    if not script:
+-        return {"episode": episode, "readers": []}
+-
+-    js_url = urljoin(page_url.rstrip("/") + "/", script["src"])
+-
+-    js_response = scraper.get(
+-        js_url,
+-        headers={**headers, "Referer": page_url},
+-        timeout=20
+-    )
+-    js_response.raise_for_status()
++    # DEV_INLINE_EPISODES_11J2C5
++    # Nouveau format : tableaux intégrés et références lien:<ID>.
++    inline = "\n".join(
++        script.string or script.get_text() or ""
++        for script in soup.find_all("script")
++        if not script.get("src")
++    )
+ 
+     matches = re.findall(
+-        r"var\s+(eps\w+)\s*=\s*\[(.*?)\];",
+-        js_response.text,
++        r"\b(?:var|let|const)\s+(eps\w+)\s*=\s*\[(.*?)\]\s*;",
++        inline,
+         re.DOTALL
+     )
++
++    token_match = re.search(
++        r"""(?:window\.)?epsJeton\s*=\s*(["'])([^"']{1,512})\1""",
++        inline
++    )
++    token = token_match.group(2) if token_match else None
++
++    # Compatibilité avec l'ancien format episodes.js.
++    if not matches:
++        script = soup.find(
++            "script",
++            src=lambda s: s and "episodes.js" in s
++        )
++
++        if not script:
++            return {"episode": episode, "readers": []}
++
++        js_url = _safe_episodes_js_url(page_url, script["src"])
++
++        js_response = scraper.get(
++            js_url,
++            headers={**headers, "Referer": page_url},
++            timeout=20
++        , allow_redirects=False)
++        js_response.raise_for_status()
++        if js_response.status_code != 200:
++            raise ValueError("Réponse HTTP inattendue ou redirection refusée")
++
++        matches = re.findall(
++            r"var\s+(eps\w+)\s*=\s*\[(.*?)\];",
++            js_response.text,
++            re.DOTALL
++        )
+ 
+     readers = []
+     seen = set()
+ 
+-    for name, content in matches:
+-        urls = re.findall(
+-            r"""['"](https?://[^'"]+)['"]""",
+-            content
++    for name, content in matches[:10]:
++        # Préserver les emplacements vides des épisodes.
++        values = re.findall(
++            r"""(["'])(.*?)\1""",
++            content,
++            re.DOTALL
+         )
+ 
+         index = episode - 1
+-
+-        if index >= len(urls):
+-            continue
+-
+-        url = urls[index].strip()
++        if index < 0 or index >= len(values):
++            continue
++
++        value = values[index][1].strip()
++        if not value:
++            continue
++
++        reference = re.fullmatch(r"lien:([0-9]{1,12})", value)
++
++        if reference:
++            if not token:
++                continue
++
++            try:
++                response = scraper.get(
++                    "https://anime-sama.to/api/lien.php",
++                    params={
++                        "j": token,
++                        "l": reference.group(1)
++                    },
++                    headers={
++                        **headers,
++                        "Referer": page_url,
++                        "Accept": "application/json"
++                    },
++                    timeout=(4, 12),
++                    allow_redirects=False
++                )
++
++                if response.status_code != 200:
++                    continue
++
++                if "application/json" not in response.headers.get(
++                    "Content-Type", ""
++                ).lower():
++                    continue
++
++                payload = response.json()
++            except (requests.RequestException, ValueError):
++                continue
++
++            if not isinstance(payload, dict):
++                continue
++
++            url = payload.get("u")
++            if not isinstance(url, str):
++                continue
++
++            url = url.strip()
++        else:
++            url = value
++
++        if not url or len(url) > 8192:
++            continue
++
+         parsed = urlparse(url)
+ 
+-        if parsed.scheme not in ("http", "https"):
++        if parsed.scheme != "https":
+             continue
+ 
+         if not parsed.hostname or url in seen:
+--- /dev/null
++++ b/src/safe_transport.py
+@@ -0,0 +1,166 @@
++"""Transport HTTPS à destinations et IP contrôlées — pilote DEV."""
++
++import ipaddress
++import socket
++from urllib.parse import urlsplit
++
++from requests.adapters import HTTPAdapter
++from requests.exceptions import InvalidURL
++from urllib3.connection import HTTPSConnection
++from urllib3.connectionpool import HTTPSConnectionPool
++from urllib3.exceptions import NewConnectionError
++
++
++class GuardedHTTPSConnection(HTTPSConnection):
++    def _new_conn(self):
++        try:
++            answers = socket.getaddrinfo(
++                self._dns_host,
++                self.port,
++                family=socket.AF_UNSPEC,
++                type=socket.SOCK_STREAM,
++                proto=socket.IPPROTO_TCP,
++            )
++        except socket.gaierror as exc:
++            raise NewConnectionError(
++                self, "Résolution DNS impossible"
++            ) from exc
++
++        if not answers:
++            raise NewConnectionError(
++                self, "Aucune adresse DNS"
++            )
++
++        # Vérifier TOUTES les adresses avant toute connexion.
++        for family, socktype, proto, _, address in answers:
++            try:
++                ip_text = address[0]
++                ip = ipaddress.ip_address(ip_text)
++
++                if (
++                    family not in (socket.AF_INET, socket.AF_INET6)
++                    or "%" in ip_text
++                    or not ip.is_global
++                    or ip.is_multicast
++                ):
++                    raise ValueError("Adresse non publique")
++            except ValueError as exc:
++                raise NewConnectionError(
++                    self, "Destination DNS refusée"
++                ) from exc
++
++        last_error = None
++
++        for family, socktype, proto, _, address in answers:
++            sock = None
++
++            try:
++                sock = socket.socket(family, socktype, proto)
++
++                for option in self.socket_options or ():
++                    sock.setsockopt(*option)
++
++                sock.settimeout(self.timeout)
++
++                if self.source_address:
++                    sock.bind(self.source_address)
++
++                # Connexion à l'adresse déjà vérifiée.
++                # Aucun second DNS sur le nom d'hôte.
++                sock.connect(address)
++                return sock
++
++            except OSError as exc:
++                last_error = exc
++                if sock is not None:
++                    sock.close()
++
++        raise NewConnectionError(
++            self,
++            "Connexion aux adresses publiques impossible"
++        ) from last_error
++
++
++class GuardedHTTPSPool(HTTPSConnectionPool):
++    ConnectionCls = GuardedHTTPSConnection
++
++
++class RejectHTTPAdapter(HTTPAdapter):
++    def send(self, request, **kwargs):
++        raise InvalidURL("HTTP non chiffré interdit")
++
++
++class GuardedHTTPSAdapter(HTTPAdapter):
++    def __init__(
++        self, allowed_hosts, allowed_subdomains=(), **kwargs
++    ):
++        self.allowed_subdomains = frozenset(
++            suffix.lower().strip(".")
++            for suffix in allowed_subdomains
++        )
++        self.allowed_hosts = frozenset(
++            host.lower() for host in allowed_hosts
++        )
++        super().__init__(**kwargs)
++
++    def init_poolmanager(
++        self, connections, maxsize, block=False, **kwargs
++    ):
++        super().init_poolmanager(
++            connections, maxsize, block=block, **kwargs
++        )
++        self.poolmanager.pool_classes_by_scheme = {
++            **self.poolmanager.pool_classes_by_scheme,
++            "https": GuardedHTTPSPool,
++        }
++
++    def send(self, request, **kwargs):
++        parsed = urlsplit(request.url)
++        host = (parsed.hostname or "").lower()
++
++        if (
++            parsed.scheme != "https"
++            or not (
++                host in self.allowed_hosts
++                or any(
++                    host.endswith("." + suffix)
++                    for suffix in self.allowed_subdomains
++                )
++            )
++            or parsed.port is not None
++            or parsed.username is not None
++            or parsed.password is not None
++            or parsed.fragment
++        ):
++            raise InvalidURL("Destination HTTPS non autorisée")
++
++        if kwargs.get("proxies"):
++            raise InvalidURL("Proxy interdit")
++
++        if kwargs.get("verify") is not True:
++            raise InvalidURL("Vérification TLS obligatoire")
++
++        supplied_host = request.headers.get("Host")
++        if supplied_host and supplied_host.lower() != host:
++            raise InvalidURL("En-tête Host non autorisé")
++
++        return super().send(request, **kwargs)
++
++
++def configure_safe_session(
++    session, allowed_hosts, allowed_subdomains=()
++):
++    """Configure une session requests/cloudscraper dédiée."""
++    session.trust_env = False
++    session.verify = True
++
++    session.mount("http://", RejectHTTPAdapter())
++    session.mount(
++        "https://",
++        GuardedHTTPSAdapter(
++            allowed_hosts,
++            allowed_subdomains=allowed_subdomains,
++        ),
++    )
++
++    return session
+--- a/src/utils/resolvers.py
++++ b/src/utils/resolvers.py
+@@ -5,7 +5,48 @@
+ from concurrent.futures import ThreadPoolExecutor
+ 
+ # --- Configuration & Headers ---
+-scraper = cloudscraper.create_scraper()
++
++
++from ..safe_transport import (
++    GuardedHTTPSAdapter,
++    RejectHTTPAdapter,
++)
++
++
++def _require_protected_session(session):
++    """Refuse tout accès réseau sans la session protégée du projet."""
++    if (
++        session is None
++        or getattr(session, "trust_env", None) is not False
++        or getattr(session, "verify", None) is not True
++    ):
++        raise ValueError("Session HTTPS protégée obligatoire")
++
++    try:
++        https_adapter = session.get_adapter(
++            "https://ansembed.net/"
++        )
++        http_adapter = session.get_adapter(
++            "http://ansembed.net/"
++        )
++    except (AttributeError, ValueError) as exc:
++        raise ValueError("Adaptateurs réseau invalides") from exc
++
++    expected_hosts = frozenset(RESOLVER_MAP) | {
++        "vmpx.online", "vmget.online"
++    }
++
++    if (
++        not isinstance(https_adapter, GuardedHTTPSAdapter)
++        or not isinstance(http_adapter, RejectHTTPAdapter)
++        or https_adapter.allowed_hosts != expected_hosts
++        or https_adapter.allowed_subdomains
++            != frozenset({"vmpx.online", "vmget.online"})
++    ):
++        raise ValueError("Politique réseau non autorisée")
++
++    return session
++
+ 
+ HEADERS = {
+     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+@@ -42,16 +83,16 @@
+     Vidmoly resolver. Tries .net domain which often bypasses bot walls better.
+     Supports JS redirection.
+     """
+-    s = session or scraper
++    s = _require_protected_session(session)
+     url_net = url.replace("vidmoly.to", "vidmoly.net")
+     try:
+-        r = s.get(url_net, headers={**HEADERS, "Referer": url_net}, timeout=8)
++        r = s.get(url_net, headers={**HEADERS, "Referer": url_net}, timeout=8, allow_redirects=False)
+         if r.status_code not in (200, 206):
+             return None
+         
+         redirect_match = re.search(r"window\.location\.replace\('([^']+)'\)", r.text)
+         if redirect_match:
+-            r = s.get(redirect_match.group(1), headers={**HEADERS, "Referer": url_net}, timeout=8)
++            r = s.get(redirect_match.group(1), headers={**HEADERS, "Referer": url_net}, timeout=8, allow_redirects=False)
+             if r.status_code not in (200, 206):
+                 return None
+             
+@@ -66,11 +107,11 @@
+     """
+     SmoothPre/VidHide/StreamWish resolver. Decodes P.A.C.K. JavaScript to find m3u8.
+     """
+-    s = session or scraper
++    s = _require_protected_session(session)
+     parsed = urlparse(url)
+     base_url = f"{parsed.scheme}://{parsed.netloc}"
+     try:
+-        r = s.get(url, headers={**HEADERS, "Referer": base_url + "/"}, timeout=8)
++        r = s.get(url, headers={**HEADERS, "Referer": base_url + "/"}, timeout=8, allow_redirects=False)
+         if r.status_code not in (200, 206):
+             return None
+         eval_match = re.search(r"eval\(function\(p,a,c,k,e,d\)\{.*?\}\('(.*?)',(\d+),(\d+),'(.*?)'\.split\('\|'\)\)\)", r.text, re.DOTALL)
+@@ -91,9 +132,9 @@
+     """
+     SendVid resolver. Extracts MP4 URL from <source> or og:video.
+     """
+-    s = session or scraper
+-    try:
+-        r = s.get(url, headers={**HEADERS, "Referer": "https://sendvid.com/"}, timeout=8)
++    s = _require_protected_session(session)
++    try:
++        r = s.get(url, headers={**HEADERS, "Referer": "https://sendvid.com/"}, timeout=8, allow_redirects=False)
+         if r.status_code not in (200, 206):
+             return None
+         match = re.search(r'<source\s+src="([^"]+\.mp4[^"]*)"', r.text)
+@@ -115,9 +156,9 @@
+     """
+     Ansembed / Movembed resolver. Extracts m3u8 playlist URL directly from player page.
+     """
+-    s = session or scraper
+-    try:
+-        r = s.get(url, headers={**HEADERS, "Referer": url}, timeout=8)
++    s = _require_protected_session(session)
++    try:
++        r = s.get(url, headers={**HEADERS, "Referer": url}, timeout=8, allow_redirects=False)
+         if r.status_code not in (200, 206):
+             return None
+         match = re.search(r'file\s*:\s*["\'](https?://[^"\']+\.m3u8[^"\']*)["\']', r.text)
+@@ -133,9 +174,9 @@
+     """
+     Embed4me / Lplayer resolver. Tente d'extraire le m3u8 depuis la page du player.
+     """
+-    s = session or scraper
+-    try:
+-        r = s.get(url, headers={**HEADERS, "Referer": url}, timeout=8)
++    s = _require_protected_session(session)
++    try:
++        r = s.get(url, headers={**HEADERS, "Referer": url}, timeout=(3, 3), allow_redirects=False)
+         if r.status_code not in (200, 206):
+             return None
+         match = re.search(r'file\s*:\s*["\'](https?://[^"\']+\.m3u8[^"\']*)["\']', r.text)
+@@ -164,7 +205,7 @@
+     if not url:
+         return (999, False)
+ 
+-    s = session or scraper
++    s = _require_protected_session(session)
+     parsed = urlparse(url)
+     referer = f"{parsed.scheme}://{parsed.netloc}/"
+     req_headers = {**HEADERS, "Referer": referer}
+@@ -172,7 +213,7 @@
+     try:
+         if stream_type == "m3u8" or ".m3u8" in url:
+             # Requête légère sur le fichier m3u8 pour valider les balises HLS
+-            r = s.get(url, headers=req_headers, timeout=6)
++            r = s.get(url, headers=req_headers, timeout=6, allow_redirects=False)
+             if r.status_code in (404, 410, 403, 502, 503):
+                 return (999, False)
+             
+@@ -193,7 +234,7 @@
+             return (999, False)
+ 
+         elif stream_type == "mp4" or ".mp4" in url:
+-            r = s.get(url, headers={**req_headers, "Range": "bytes=0-1024"}, timeout=6, stream=True)
++            r = s.get(url, headers={**req_headers, "Range": "bytes=0-1024"}, timeout=6, stream=True, allow_redirects=False)
+             if r.status_code in (404, 410, 403, 502, 503):
+                 return (999, False)
+             
+@@ -208,9 +249,17 @@
+         elif stream_type in ("embed", "raw"):
+             return (1, True)
+ 
+-    except (requests.exceptions.RequestException, Exception):
+-        # Ne PAS rejeter un épisode si la connexion est lente ou si le serveur met du temps à répondre
++    except requests.exceptions.Timeout:
++        # Une lenteur réseau peut être temporaire.
+         return (1, True)
++
++    except requests.exceptions.RequestException:
++        # DNS refusé, connexion interdite, TLS invalide, URL rejetée.
++        return (999, False)
++
++    except Exception:
++        # Une erreur inattendue ne valide jamais un flux.
++        return (999, False)
+ 
+     return (1, True)
+ 
+--- a/src/utils/utils.py
++++ b/src/utils/utils.py
+@@ -4,87 +4,7 @@
+ 
+ class Utils:
+     def findLink(URL_PW=URL_PW): # Function AI Assist
+-
+-        scraper = cloudscraper.create_scraper()  # équivaut à un navigateur
+-        reponse = scraper.get(f"{URL_PW}")
+-        html = reponse.text
+-
+-        # Extraire la liste des domaines du JavaScript
+-        pattern = r"const domains = \[(.*?)\];"
+-        match = re.search(pattern, html, re.DOTALL)
+-
+-        if match:
+-            domains_js = match.group(1)
+-            
+-            # Extraire chaque domaine avec une regex
+-            domain_pattern = r"name: '([^']+)'"
+-            domains = re.findall(domain_pattern, domains_js)
+-            
+-            main_domain = None
+-            results = []
+-            url_final = []
+-            
+-            for domain in domains:
+-                # print(f"Vérification de : {domain}")
+-                
+-                try:
+-                    url = f"https://{domain}"
+-                    
+-                    # Première requête SANS suivre les redirections
+-                    response_no_redirect = scraper.get(url, timeout=5, allow_redirects=False)
+-                    
+-                    result = {
+-                        'domain': domain,
+-                        'initial_code': response_no_redirect.status_code,
+-                        'status': 'unknown'
+-                    }
+-                    
+-                    # Vérifier si c'est une redirection (301, 302, 307, 308)
+-                    if response_no_redirect.status_code in [301, 302, 303, 307, 308]:
+-                        redirect_to = response_no_redirect.headers.get('Location', '')
+-                        result['status'] = 'redirect'
+-                        result['redirect_to'] = redirect_to
+-                        
+-                        # Suivre la redirection pour voir où ça mène
+-                        response_with_redirect = scraper.get(url, timeout=5, allow_redirects=True)
+-                        result['final_code'] = response_with_redirect.status_code
+-                        result['final_url'] = response_with_redirect.url
+-                        
+-                        # print(f"{domain} redirige vers {redirect_to} (code: {response_no_redirect.status_code})")
+-                        # print(f"  URL finale: {result['final_url']} (code: {result['final_code']})")
+-                    
+-                    # Si code 200 = domaine principal actif
+-                    elif response_no_redirect.status_code == 200:
+-                        result['status'] = 'online'
+-                        result['final_code'] = 200
+-                        result['final_url'] = url
+-                        main_domain = f'https://{domain}'  # Domaine principal
+-                        
+-                    
+-                    # Autres codes
+-                    else:
+-                        result['status'] = 'other'
+-                        result['final_code'] = response_no_redirect.status_code
+-                        # print(f"{domain} retourne le code: {response_no_redirect.status_code}")
+-                    
+-                    results.append(result)
+-                        
+-                except requests.exceptions.RequestException as e:
+-                    # print(f"{domain} est inactif ou inaccessible: {e}")
+-                    results.append({
+-                        'domain': domain,
+-                        'status': 'offline',
+-                        'error': str(e)
+-                    })
+-                
+-            if main_domain:
+-                # print(f"\nDOMAINE PRINCIPAL: {main_domain}")
+-                return main_domain
+-            else:
+-                print("\nAucun domaine principal trouvé (code 200)")
+-                return None
+-        
+-        return None
++        return "https://anime-sama.to"
+ 
+ 
+     def transform_chapters(data, title: str) -> dict:

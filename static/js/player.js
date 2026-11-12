@@ -350,6 +350,12 @@ async function launchNativeHls(options) {
             video.addEventListener(event, () => {
                 if (nativeHlsVideo === video) {
                     updateFromVideoElement(video);
+
+                    // 11J.2B.1 : sauvegarde immédiate
+                    // avant une éventuelle suspension iOS.
+                    if (event === 'pause' || event === 'seeked') {
+                        saveNativeHlsProgress(true);
+                    }
                 }
             });
         }
@@ -1404,7 +1410,9 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds, 
         recordHistory(slug, episodeIndex + 1);
         resetIdleTimer();
         startPlayerPolling();
-        updatePlayPauseButton(true);
+        // 11J.2B.2 : ne pas annoncer une lecture
+        // avant que le lecteur confirme son démarrage.
+        updatePlayPauseButton(false);
         syncPlayerMediaMetadata();
         syncDiscordRpc(true);
 
