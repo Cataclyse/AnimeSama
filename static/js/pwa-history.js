@@ -51,6 +51,7 @@
     }
 
     const originalSwitchView = window.switchView;
+    let displayedView = initialView;
     let restoring = false;
 
     window.switchView = function (viewName, ...args) {
@@ -61,6 +62,10 @@
         const result = originalSwitchView.call(
             this, viewName, ...args
         );
+
+        if (views.has(viewName)) {
+            displayedView = viewName;
+        }
 
         if (
             !restoring &&
@@ -90,11 +95,18 @@
 
         if (!views.has(view)) return;
 
+        // Une transition entre modales ne doit pas
+        // réinitialiser la rubrique courante.
+        if (view === displayedView) return;
+
         restoring = true;
+        window.__cataclysePwaRestoringView = true;
 
         try {
             originalSwitchView.call(window, view);
+            displayedView = view;
         } finally {
+            window.__cataclysePwaRestoringView = false;
             restoring = false;
         }
     });
