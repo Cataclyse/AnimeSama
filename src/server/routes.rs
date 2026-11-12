@@ -164,12 +164,40 @@ pub fn handle_request(mut req: tiny_http::Request, state: Arc<AppState>) {
                 return;
             }
 
+            println!("[DEBUG] /api/episodes slug={} season={}", slug, season);
             match state.scraper.get_episodes(&slug, &season) {
                 Ok(episodes) => {
+                    println!(
+                        "[DEBUG] /api/episodes OK: season={} total={} players={:?}",
+                        episodes.season,
+                        episodes.total_episodes,
+                        episodes.players.keys().collect::<Vec<_>>()
+                    );
                     respond_json(req, &json!(episodes).to_string());
                 }
                 Err(e) => {
+                    println!("[DEBUG] /api/episodes ERREUR: {}", e);
                     respond_error(req, 500, &format!("Erreur épisodes: {}", e));
+                }
+            }
+        }
+
+        ("GET", "/api/lien") => {
+            let jeton = query_params.get("j").cloned().unwrap_or_default();
+            let id = query_params.get("l").cloned().unwrap_or_default();
+            let slug = query_params.get("slug").cloned().unwrap_or_default();
+            let season = query_params.get("season").cloned().unwrap_or_default();
+            if jeton.is_empty() || id.is_empty() {
+                respond_error(req, 400, "Paramètres 'j' et 'l' requis");
+                return;
+            }
+            let referer = format!("https://anime-sama.to/catalogue/{}/{}/", slug, season);
+            println!("[DEBUG] /api/lien l={} slug={} season={}", id, slug, season);
+            match crate::scraper::episodes::resolve_lien(&jeton, &id, &referer) {
+                Ok(u) => respond_json(req, &json!({ "u": u }).to_string()),
+                Err(e) => {
+                    println!("[DEBUG] /api/lien ERREUR: {}", e);
+                    respond_error(req, 502, &e);
                 }
             }
         }

@@ -453,8 +453,15 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
                     }
                 }
             }
-            if (!res.ok) throw new Error('Erreur récupération épisodes');
+            console.log('[DEBUG player] /api/episodes', { slug, normalizedSeason, status: res.status, ok: res.ok });
+            if (!res.ok) {
+                let body = '';
+                try { body = await res.clone().text(); } catch (e) {}
+                console.error('[DEBUG player] /api/episodes body:', body);
+                throw new Error(`Erreur récupération épisodes (HTTP ${res.status})`);
+            }
             State.currentEpisodes = await res.json();
+            console.log('[DEBUG player] episodes reçus', State.currentEpisodes);
             const players = Object.keys(State.currentEpisodes.players || {});
             State.selectedPlayer = pickBestPlayer(players, State.selectedPlayer);
         }
@@ -550,7 +557,22 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
             localStorage.setItem('as_last_selected_lang', State.selectedLanguage);
         } catch (e) {}
 
+        if (typeof videoUrl === 'string' && videoUrl.startsWith('lien:')) {
+            const lienRes = await fetch(
+                `/api/lien?j=${encodeURIComponent(State.currentEpisodes.jeton || '')}` +
+                `&l=${encodeURIComponent(videoUrl.slice(5))}` +
+                `&slug=${encodeURIComponent(slug)}&season=${encodeURIComponent(State.currentEpisodes.season)}`
+            );
+            const lienData = await lienRes.json().catch(() => ({}));
+            console.log('[DEBUG player] /api/lien', { videoUrl, status: lienRes.status, lienData });
+            if (!lienRes.ok || !lienData.u) {
+                throw new Error(`Lien indisponible (${lienData.error || 'HTTP ' + lienRes.status})`);
+            }
+            videoUrl = lienData.u;
+        }
+
         let proxyUrl = toProxyUrl(videoUrl);
+        console.log('[DEBUG player] lecture', { player: State.selectedPlayer, episodeIndex, videoUrl, proxyUrl });
         if (!proxyUrl) {
             showToast(t('player.launch_error', 'Impossible de lancer le lecteur'));
             return;
@@ -637,8 +659,8 @@ async function openEpisodePlayer(slug, seasonPath, episodeIndex, resumeSeconds) 
         const skipBtn = document.getElementById('netflixSkipIntroBtn');
         if (skipBtn) skipBtn.style.display = 'none';
     } catch (e) {
-        console.error('Erreur lecture vidéo:', e);
-        showToast('Impossible de lancer le lecteur');
+        console.error('[DEBUG player] Erreur lecture vidéo:', e, e && e.stack);
+        showToast(`Impossible de lancer le lecteur (${e && e.message ? e.message : e})`);
     }
 }
 

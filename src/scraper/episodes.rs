@@ -26,6 +26,51 @@ pub struct SeasonEpisodes {
     pub available_languages: Vec<String>,
     #[serde(default)]
     pub scan_data: Option<ScanData>,
+    #[serde(default)]
+    pub jeton: Option<String>,
+}
+
+const BROWSER_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+fn fetch_season_page(base_url: &str) -> Option<String> {
+    let resp = match ureq::get(base_url)
+        .set("User-Agent", BROWSER_UA)
+        .set("Referer", "https://anime-sama.to/")
+        .timeout(std::time::Duration::from_secs(8))
+        .call()
+    {
+        Ok(r) => r,
+        Err(e) => {
+            println!("[DEBUG] page saison ECHEC {}: {}", base_url, e);
+            return None;
+        }
+    };
+    let html = resp.into_string().ok()?;
+    let has_eps = Regex::new(r#"(?:var|let|const)\s+eps\d*\s*=\s*\["#).unwrap().is_match(&html);
+    println!("[DEBUG] page saison OK {} ({} octets, eps inline: {})", base_url, html.len(), has_eps);
+    if has_eps { Some(html) } else { None }
+}
+
+/// Résout un repère `lien:<id>` en vraie URL de lecteur via /api/lien.php (depuis 12/11/2026).
+pub fn resolve_lien(jeton: &str, id: &str, referer: &str) -> Result<String, String> {
+    let url = format!(
+        "https://anime-sama.to/api/lien.php?j={}&l={}",
+        url_encode(jeton),
+        url_encode(id)
+    );
+    let resp = ureq::get(&url)
+        .set("User-Agent", BROWSER_UA)
+        .set("Referer", referer)
+        .timeout(std::time::Duration::from_secs(8))
+        .call()
+        .map_err(|e| format!("Erreur réseau lien.php: {}", e))?;
+    let text = resp.into_string().map_err(|e| format!("Erreur lecture lien.php: {}", e))?;
+    println!("[DEBUG] lien.php l={} -> {}", id, text.chars().take(200).collect::<String>());
+    let v: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("JSON lien.php invalide: {}", e))?;
+    match v.get("u").and_then(|u| u.as_str()) {
+        Some(u) if !u.is_empty() => Ok(u.to_string()),
+        _ => Err(format!("lien.php: {}", v.get("erreur").and_then(|e| e.as_str()).unwrap_or("réponse sans url"))),
+    }
 }
 
 pub fn url_encode(input: &str) -> String {
@@ -199,6 +244,7 @@ pub fn fetch_scan_episodes(slug: &str, season_path: &str) -> Result<SeasonEpisod
             total_chapters,
             chapters,
         }),
+        jeton: None,
     })
 }
 
@@ -249,16 +295,23 @@ pub fn fetch_episodes(slug: &str, season_path: &str) -> Result<SeasonEpisodes, S
         langs
     });
 
+    let page_html = fetch_season_page(&base_url);
+    let mut actual_season = clean_season.clone();
+    let js = if let Some(h) = page_html.clone() {
+        h
+    } else {
     let resp = ureq::get(&ep_url)
-        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .set("User-Agent", BROWSER_UA)
         .set("Referer", &base_url)
         .timeout(std::time::Duration::from_secs(8))
         .call();
-
-    let mut actual_season = clean_season.clone();
-    let js = match resp {
-        Ok(r) => r.into_string().map_err(|e| format!("Erreur lecture episodes.js: {}", e))?,
-        Err(_) => {
+    match resp {
+        Ok(r) => {
+            println!("[DEBUG] episodes.js OK {} ({})", ep_url, r.status());
+            r.into_string().map_err(|e| format!("Erreur lecture episodes.js: {}", e))?
+        }
+        Err(e) => {
+            println!("[DEBUG] episodes.js ECHEC {}: {}", ep_url, e);
             let season_base = clean_season.split('/').next().unwrap_or("saison1");
             let fallback_season = format!("{}/vostfr", season_base);
             let fallback_url = format!("https://anime-sama.to/catalogue/{}/{}/episodes.js", clean_slug, fallback_season);
@@ -296,7 +349,16 @@ pub fn fetch_episodes(slug: &str, season_path: &str) -> Result<SeasonEpisodes, S
                 }
             }
         }
+    }
     };
+
+    let jeton = Regex::new(r#"epsJeton\s*=\s*["']([^"']+)["']"#).unwrap()
+        .captures(&js).map(|c| c[1].to_string());
+    let mut eps_meta: HashMap<String, String> = HashMap::new();
+    for c in Regex::new(r#""(\d+)"\s*:\s*\[\s*"([^"]+)""#).unwrap().captures_iter(&js) {
+        eps_meta.insert(c[1].to_string(), c[2].to_string());
+    }
+    println!("[DEBUG] jeton={:?} meta={} entrées", jeton, eps_meta.len());
 
     let array_re = Regex::new(r#"(?:var|let|const)\s+([a-zA-Z0-9_]+)\s*=\s*\[([^\]]*)\]"#).unwrap();
     let str_re = Regex::new(r#"['"]([^'"]+)['"]"#).unwrap();
@@ -331,7 +393,10 @@ pub fn fetch_episodes(slug: &str, season_path: &str) -> Result<SeasonEpisodes, S
     let brand_handles: Vec<_> = groups
         .iter()
         .map(|(_, urls)| {
-            let first = urls.first().cloned();
+            let first = urls.first().map(|u| match u.strip_prefix("lien:").and_then(|id| eps_meta.get(id)) {
+                Some(host) => format!("https://{}/", host),
+                None => u.clone(),
+            });
             std::thread::spawn(move || first.and_then(|u| detect_hoster_brand(&u)))
         })
         .collect();
@@ -340,7 +405,12 @@ pub fn fetch_episodes(slug: &str, season_path: &str) -> Result<SeasonEpisodes, S
     for ((var_name, urls), handle) in groups.into_iter().zip(brand_handles) {
         let detected_brand = handle.join().unwrap_or(None);
         let host_name = detected_brand
-            .or_else(|| urls.first().and_then(|u| host_label(u)))
+            .or_else(|| {
+                urls.first().and_then(|u| match u.strip_prefix("lien:").and_then(|id| eps_meta.get(id)) {
+                    Some(host) => host_label(&format!("https://{}/", host)),
+                    None => host_label(u),
+                })
+            })
             .unwrap_or_else(|| format!("Lecteur {}", var_name.trim_start_matches("eps")));
 
         let label = if players.contains_key(&host_name) {
@@ -365,6 +435,7 @@ pub fn fetch_episodes(slug: &str, season_path: &str) -> Result<SeasonEpisodes, S
         players,
         available_languages,
         scan_data: None,
+        jeton,
     };
 
     Ok(season_episodes)
